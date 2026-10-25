@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<!-- Declara que el documento es HTML5 -->
+<html lang="es">
+<!-- Etiqueta raíz del documento, con idioma español -->
+<head>
+  <!-- Codificación de caracteres UTF-8 para acentos y emojis -->
+  <meta charset="UTF-8">
+  <!-- Ajusta el ancho al dispositivo (mobile first) y respeta el notch con viewport-fit -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Color de la barra del navegador en móviles -->
+  <meta name="theme-color" content="#000000">
+  <!-- Evita que el navegador envíe la URL (con el ID) como referer a otros sitios -->
+  <meta name="referrer" content="no-referrer">
+  <!-- Título de la pestaña -->
+  <title>Chat Efímero P2P</title>
+
+  <!-- Carga la librería PeerJS desde unpkg (se usa solo para el signaling WebRTC) -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+  <!-- Inicio de los estilos inline -->
+  <style>
+    /* Variables de color y medidas reutilizables */
+    :root {
+      /* Fondo general negro puro */
+      --fondo: #000000;
+      /* Fondo de paneles y del input */
+      --panel: #1c1c1e;
+      /* Borde sutil de los paneles */
+      --borde: #2c2c2e;
+      /* Color de texto principal */
+      --texto: #f2f2f7;
+      /* Color de texto secundario (grisáceo) */
+      --texto-suave: #8e8e93;
+      /* Azul de las burbujas propias, estilo iMessage */
+      --azul: #0a84ff;
+      /* Gris de las burbujas del otro usuario */
+      --gris: #3a3a3c;
+      /* Verde para el estado "conectado" */
+      --verde: #30d158;
+      /* Rojo para errores o desconexión */
+      --rojo: #ff453a;
+      /* Naranja para el estado "esperando" y el fuego */
+      --naranja: #ff9f0a;
+    }
+
+    /* Hace que padding y borde se incluyan en el ancho de todos los elementos */
+    *, *::before, *::after {
+      /* Modelo de caja más predecible */
+      box-sizing: border-box;
+    }
+
+    /* Estilos del html y del body */
+    html, body {
+      /* Quita el margen por defecto */
+      margin: 0;
+      /* Ocupa toda la altura disponible */
+      height: 100%;
+      /* Fondo negro (dark mode) */
+      background: var(--fondo);
+      /* Texto claro */
+      color: var(--texto);
+      /* Fuente del sistema, igual que iOS/Android */
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      /* Suaviza las fuentes en macOS/iOS */
+      -webkit-font-smoothing: antialiased;
+      /* Quita el resaltado azul al tocar en móviles */
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Contenedor principal de la app */
+    .app {
+      /* Organiza los hijos en columna */
+      display: flex;
+      /* Dirección vertical: cabecera, mensajes, input */
+      flex-direction: column;
+      /* Altura dinámica real en móviles (descuenta la barra del navegador) */
+      height: 100dvh;
+      /* Ancho máximo para que en escritorio quede centrado como un teléfono */
+      max-width: 480px;
+      /* Centra horizontalmente */
+      margin: 0 auto;
+      /* Espacio interno respetando las zonas seguras (notch) */
+      padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+    }
+
+    /* Cabecera superior */
+    .cabecera {
+      /* Centra el texto */
+      text-align: center;
+      /* Espacio arriba y abajo */
+      padding: 16px 0 8px;
+    }
+
+    /* Título de la app */
+    .cabecera h1 {
+      /* Tamaño del título */
+      font-size: 17px;
+      /* Peso semi-negrita */
+      font-weight: 600;
+      /* Sin margen extra */
+      margin: 0 0 6px;
+    }
+
+    /* Línea de estado (conectando / conectado / etc.) */
+    .estado {
+      /* Muestra punto y texto en línea */
+      display: inline-flex;
+      /* Alinea verticalmente punto y texto */
+      align-items: center;
+      /* Separación entre punto y texto */
+      gap: 6px;
+      /* Texto pequeño */
+      font-size: 13px;
+      /* Color gris */
+      color: var(--texto-suave);
+    }
+
+    /* Puntito de color del estado */
+    .estado .punto {
+      /* Ancho del punto */
+      width: 8px;
+      /* Alto del punto */
+      height: 8px;
+      /* Lo hace circular */
+      border-radius: 50%;
+      /* Por defecto naranja (esperando) */
+      background: var(--naranja);
+    }
+
+    /* Punto verde cuando hay conexión */
+    .estado.conectado .punto {
+      /* Color verde */
+      background: var(--verde);
+      /* Brillo verde alrededor */
+      box-shadow: 0 0 8px var(--verde);
+    }
+
+    /* Texto verde cuando hay conexión */
+    .estado.conectado {
+      /* Color del texto */
+      color: var(--verde);
+    }
+
+    /* Punto rojo cuando hay error o desconexión */
+    .estado.error .punto {
+      /* Color rojo */
+      background: var(--rojo);
+    }
+
+    /* Texto rojo cuando hay error */
+    .estado.error {
+      /* Color del texto */
+      color: var(--rojo);
+    }
+
+    /* Panel que muestra el link para invitar */
+    .panel-link {
+      /* Fondo gris oscuro */
+      background: var(--panel);
+      /* Borde sutil */
+      border: 1px solid var(--borde);
+      /* Esquinas redondeadas */
+      border-radius: 16px;
+      /* Espacio interno */
+      padding: 14px;
+      /* Separación con la cabecera */
+      margin-top: 8px;
+      /* Centra el contenido */
+      text-align: center;
+    }
+
+    /* Clase para ocultar cualquier elemento */
+    .oculto {
+      /* No se muestra ni ocupa espacio */
+      display: none !important;
+    }
+
+    /* Texto "Tu link para chatear:" */
+    .panel-link p {
+      /* Sin margen superior y poco inferior */
+      margin: 0 0 8px;
+      /* Tamaño pequeño */
+      font-size: 13px;
+      /* Color gris */
+      color: var(--texto-suave);
+    }
+
+    /* Caja donde aparece la URL */
+    .url {
+      /* Fuente monoespaciada para leer bien el ID */
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      /* Tamaño pequeño */
+      font-size: 12px;
+      /* Corta la URL en cualquier punto para que no desborde */
+      word-break: break-all;
+      /* Fondo negro */
+      background: #000;
+      /* Esquinas redondeadas */
+      border-radius: 10px;
+      /* Espacio interno */
+      padding: 10px;
+      /* Permite seleccionar todo el texto con un clic */
+      user-select: all;
+      /* Separación con el botón */
+      margin-bottom: 10px;
+    }
+
+    /* Botones genéricos */
+    button {
+      /* Usa la misma fuente que el resto */
+      font: inherit;
+      /* Sin borde */
+      border: none;
+      /* Cursor de mano */
+      cursor: pointer;
+    }
+
+    /* Botón "Copiar link" */
+    .btn-copiar {
+      /* Fondo azul */
+      background: var(--azul);
+      /* Texto blanco */
+      color: #fff;
+      /* Forma de píldora */
+      border-radius: 999px;
+      /* Espacio interno */
+      padding: 8px 18px;
+      /* Tamaño del texto */
+      font-size: 14px;
+      /* Semi-negrita */
+      font-weight: 600;
+    }
+
+    /* Zona central donde aparece el único mensaje visible */
+    .escenario {
+      /* Ocupa todo el espacio sobrante */
+      flex: 1;
+      /* Flex para posicionar la burbuja */
+      display: flex;
+      /* Apila en columna */
+      flex-direction: column;
+      /* La burbuja se pega abajo, como en iMessage */
+      justify-content: flex-end;
+      /* Sin scroll: solo existe 1 mensaje a la vez */
+      overflow: hidden;
+      /* Espacio arriba y abajo */
+      padding: 16px 0;
+      /* Contexto para posicionar el texto vacío */
+      position: relative;
+    }
+
+    /* Texto que se ve cuando no hay mensajes */
+    .vacio {
+      /* Lo posiciona en el centro del escenario */
+      position: absolute;
+      /* Ocupa todo el escenario */
+      inset: 0;
+      /* Flex para centrar */
+      display: flex;
+      /* Centrado vertical */
+      align-items: center;
+      /* Centrado horizontal */
+      justify-content: center;
+      /* Texto centrado */
+      text-align: center;
+      /* Color gris */
+      color: var(--texto-suave);
+      /* Texto pequeño */
+      font-size: 14px;
+      /* Interlineado cómodo */
+      line-height: 1.5;
+      /* No intercepta clics */
+      pointer-events: none;
+      /* Espacio lateral */
+      padding: 0 24px;
+    }
+
+    /* Burbuja de mensaje (base) */
+    .burbuja {
+      /* Contexto para la cuenta regresiva y la barra */
+      position: relative;
+      /* Ancho máximo del 80% como en iMessage */
+      max-width: 80%;
+      /* Espacio interno (derecha extra para el contador) */
+      padding: 10px 44px 14px 14px;
+      /* Esquinas muy redondeadas */
+      border-radius: 20px;
+      /* Tamaño de texto legible en móvil */
+      font-size: 17px;
+      /* Interlineado */
+      line-height: 1.35;
+      /* Corta palabras largas para no desbordar */
+      overflow-wrap: anywhere;
+      /* Respeta saltos de línea del texto */
+      white-space: pre-wrap;
+      /* Oculta lo que sobresale (barra de progreso) */
+      overflow: hidden;
+      /* Animación de entrada */
+      animation: aparecer 0.25s ease-out;
+    }
+
+    /* Burbuja propia: azul y a la derecha */
+    .burbuja.mia {
+      /* Se alinea a la derecha */
+      align-self: flex-end;
+      /* Fondo azul */
+      background: var(--azul);
+      /* Texto blanco */
+      color: #fff;
+      /* Esquina inferior derecha casi recta (colita) */
+      border-bottom-right-radius: 6px;
+    }
+
+    /* Burbuja del otro: gris y a la izquierda */
+    .burbuja.suya {
+      /* Se alinea a la izquierda */
+      align-self: flex-start;
+      /* Fondo gris */
+      background: var(--gris);
+      /* Texto claro */
+      color: var(--texto);
+      /* Esquina inferior izquierda casi recta (colita) */
+      border-bottom-left-radius: 6px;
+    }
+
+    /* Número de la cuenta regresiva dentro de la burbuja */
+    .contador {
+      /* Posición absoluta dentro de la burbuja */
+      position: absolute;
+      /* Distancia desde arriba */
+      top: 8px;
+      /* Distancia desde la derecha */
+      right: 10px;
+      /* Ancho del círculo */
+      width: 24px;
+      /* Alto del círculo */
+      height: 24px;
+      /* Círculo */
+      border-radius: 50%;
+      /* Fondo semitransparente oscuro */
+      background: rgba(0, 0, 0, 0.25);
+      /* Flex para centrar el número */
+      display: flex;
+      /* Centrado vertical */
+      align-items: center;
+      /* Centrado horizontal */
+      justify-content: center;
+      /* Tamaño del número */
+      font-size: 12px;
+      /* Negrita */
+      font-weight: 700;
+      /* Números de ancho fijo para que no "salten" */
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Cuando quedan 2 segundos o menos el contador se pone naranja */
+    .contador.urgente {
+      /* Fondo naranja */
+      background: var(--naranja);
+      /* Texto negro para contraste */
+      color: #000;
+      /* Pequeño latido */
+      animation: latido 1s ease-in-out infinite;
+    }
+
+    /* Barra de progreso que se vacía en 5 segundos */
+    .barra {
+      /* Posición absoluta en la parte inferior */
+      position: absolute;
+      /* Pegada al fondo */
+      bottom: 0;
+      /* Desde el borde izquierdo */
+      left: 0;
+      /* Alto de la barra */
+      height: 3px;
+      /* Empieza llena */
+      width: 100%;
+      /* Blanco semitransparente */
+      background: rgba(255, 255, 255, 0.55);
+      /* Se encoge desde la izquierda */
+      transform-origin: left;
+      /* Animación lineal de 5 segundos */
+      animation: vaciar 5s linear forwards;
+    }
+
+    /* Clase que dispara la animación de quemado */
+    .burbuja.quemando {
+      /* Animación de quemado de 0.9 segundos */
+      animation: quemar 0.9s ease-in forwards;
+      /* Evita clics durante el quemado */
+      pointer-events: none;
+    }
+
+    /* Versión rápida del quemado (cuando llega un mensaje nuevo) */
+    .burbuja.quemando.rapido {
+      /* Misma animación pero más corta */
+      animation-duration: 0.35s;
+    }
+
+    /* Capa de fuego que aparece encima de la burbuja al quemarse */
+    .burbuja.quemando::after {
+      /* Pseudo-elemento vacío */
+      content: "";
+      /* Cubre toda la burbuja */
+      position: absolute;
+      /* De borde a borde */
+      inset: 0;
+      /* Degradado de brasas desde abajo */
+      background: linear-gradient(to top, #ff3b00 0%, #ff9f0a 35%, rgba(255, 214, 10, 0.4) 60%, transparent 85%);
+      /* Mezcla el fuego con el color de la burbuja */
+      mix-blend-mode: screen;
+      /* El fuego sube */
+      animation: llamas 0.9s ease-in forwards;
+    }
+
+    /* Animación de entrada de la burbuja */
+    @keyframes aparecer {
+      /* Empieza pequeña e invisible */
+      from { opacity: 0; transform: translateY(12px) scale(0.92); }
+      /* Termina en su tamaño normal */
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Animación de la barra de progreso */
+    @keyframes vaciar {
+      /* Llena */
+      from { transform: scaleX(1); }
+      /* Vacía */
+      to { transform: scaleX(0); }
+    }
+
+    /* Latido del contador urgente */
+    @keyframes latido {
+      /* Tamaño normal al inicio y al final */
+      0%, 100% { transform: scale(1); }
+      /* Se agranda en la mitad */
+      50% { transform: scale(1.18); }
+    }
+
+    /* Animación de quemado: brillo, color fuego, desenfoque y desaparición */
+    @keyframes quemar {
+      /* Estado inicial: normal */
+      0% { opacity: 1; filter: none; transform: scale(1); }
+      /* Se enciende: más brillo y tono anaranjado */
+      30% { filter: brightness(1.6) sepia(1) saturate(4) hue-rotate(-20deg); transform: scale(1.03); }
+      /* Se carboniza: oscuro y desenfocado */
+      70% { opacity: 0.6; filter: brightness(0.5) sepia(1) saturate(3) blur(2px); transform: scale(0.97) translateY(-6px); }
+      /* Ceniza: desaparece hacia arriba */
+      100% { opacity: 0; filter: brightness(0) blur(8px); transform: scale(0.85) translateY(-24px); }
+    }
+
+    /* Animación de las llamas subiendo */
+    @keyframes llamas {
+      /* Empiezan abajo */
+      from { transform: translateY(100%); opacity: 0.2; }
+      /* Cubren la burbuja */
+      to { transform: translateY(-10%); opacity: 1; }
+    }
+
+    /* Barra inferior con el input */
+    .barra-input {
+      /* Elementos en fila */
+      display: flex;
+      /* Separación entre input y botón */
+      gap: 8px;
+      /* Alinea abajo */
+      align-items: flex-end;
+      /* Espacio inferior */
+      padding: 8px 0 12px;
+    }
+
+    /* Campo de texto */
+    .barra-input input {
+      /* Ocupa todo el ancho posible */
+      flex: 1;
+      /* Ancho mínimo cero para que flex funcione bien */
+      min-width: 0;
+      /* Fondo gris oscuro */
+      background: var(--panel);
+      /* Borde sutil */
+      border: 1px solid var(--borde);
+      /* Texto claro */
+      color: var(--texto);
+      /* Forma de píldora */
+      border-radius: 999px;
+      /* Espacio interno */
+      padding: 10px 16px;
+      /* 16px evita el zoom automático en iOS */
+      font-size: 16px;
+      /* Sin contorno por defecto */
+      outline: none;
+    }
+
+    /* Borde azul cuando el input tiene foco */
+    .barra-input input:focus {
+      /* Color del borde */
+      border-color: var(--azul);
+    }
+
+    /* Input deshabilitado (sin conexión) */
+    .barra-input input:disabled {
+      /* Más transparente */
+      opacity: 0.5;
+    }
+
+    /* Botón de enviar redondo */
+    .btn-enviar {
+      /* Ancho fijo */
+      width: 40px;
+      /* Alto fijo */
+      height: 40px;
+      /* No se encoge */
+      flex-shrink: 0;
+      /* Círculo */
+      border-radius: 50%;
+      /* Fondo azul */
+      background: var(--azul);
+      /* Flecha blanca */
+      color: #fff;
+      /* Flex para centrar el ícono */
+      display: flex;
+      /* Centrado vertical */
+      align-items: center;
+      /* Centrado horizontal */
+      justify-content: center;
+    }
+
+    /* Botón deshabilitado */
+    .btn-enviar:disabled {
+      /* Fondo gris */
+      background: var(--gris);
+      /* Cursor de prohibido */
+      cursor: not-allowed;
+    }
+
+    /* Respeta a quien pidió menos animaciones en su sistema */
+    @media (prefers-reduced-motion: reduce) {
+      /* Reduce la duración de casi todas las animaciones */
+      .burbuja, .burbuja.quemando, .burbuja.quemando::after, .contador.urgente {
+        /* Casi instantáneo */
+        animation-duration: 0.01s !important;
+      }
+    }
+  </style>
+  <!-- Fin de los estilos -->
+</head>
+<body>
+  <!-- Contenedor principal de toda la app -->
+  <main class="app">
+
+    <!-- Cabecera con título y estado de conexión -->
+    <header class="cabecera">
+      <!-- Título de la app -->
+      <h1>🔥 Chat Efímero</h1>
+      <!-- Indicador de estado; aria-live hace que los lectores de pantalla lo anuncien -->
+      <div id="estado" class="estado" aria-live="polite">
+        <!-- Puntito de color -->
+        <span class="punto"></span>
+        <!-- Texto del estado -->
+        <span id="estado-texto">Iniciando…</span>
+      </div>
+    </header>
+
+    <!-- Panel con el link de invitación (oculto hasta tener ID) -->
+    <section id="panel-link" class="panel-link oculto">
+      <!-- Texto explicativo pedido en el enunciado -->
+      <p>Tu link para chatear:</p>
+      <!-- Aquí se escribe la URL con ?join=ID -->
+      <div id="url" class="url"></div>
+      <!-- Botón para copiar o compartir el link -->
+      <button id="btn-copiar" class="btn-copiar" type="button">Copiar link</button>
+    </section>
+
+    <!-- Escenario donde vive el único mensaje visible -->
+    <section id="escenario" class="escenario" aria-live="polite">
+      <!-- Texto que se muestra cuando no hay mensajes -->
+      <div id="vacio" class="vacio">Compartí el link y esperá a que alguien se conecte.<br>Nada se guarda. Nada queda.</div>
+    </section>
+
+    <!-- Formulario de envío -->
+    <form id="formulario" class="barra-input" autocomplete="off">
+      <!-- Campo de texto (deshabilitado hasta conectar) -->
+      <input id="entrada" type="text" placeholder="Mensaje…" maxlength="500" disabled aria-label="Escribir mensaje">
+      <!-- Botón enviar con ícono de flecha -->
+      <button id="btn-enviar" class="btn-enviar" type="submit" disabled aria-label="Enviar">
+        <!-- Ícono SVG de flecha hacia arriba -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
+    </form>
+  </main>
+
+  <!-- Inicio de la lógica de la app -->
+  <script>
+    // Modo estricto: el navegador avisa de errores silenciosos
+    'use strict';
+
+    // ===================== CONSTANTES =====================
+
+    // Segundos que vive cada mensaje antes de autodestruirse
+    const SEGUNDOS_DE_VIDA = 5;
+    // Largo máximo permitido para un mensaje (también se valida al recibir)
+    const LARGO_MAXIMO = 500;
+    // Señal interna que se envía al cerrar la pestaña (con caracteres que el input no genera)
+    const SENAL_ADIOS = '\u0000__adios__\u0000';
+
+    // ===================== REFERENCIAS AL DOM =====================
+
+    // Contenedor del estado (para cambiar su clase de color)
+    const elEstado = document.getElementById('estado');
+    // Texto del estado
+    const elEstadoTexto = document.getElementById('estado-texto');
+    // Panel del link de invitación
+    const elPanelLink = document.getElementById('panel-link');
+    // Caja donde se escribe la URL
+    const elUrl = document.getElementById('url');
+    // Botón copiar link
+    const elBtnCopiar = document.getElementById('btn-copiar');
+    // Zona donde aparece el mensaje
+    const elEscenario = document.getElementById('escenario');
+    // Texto de "sin mensajes"
+    const elVacio = document.getElementById('vacio');
+    // Formulario de envío
+    const elFormulario = document.getElementById('formulario');
+    // Campo de texto
+    const elEntrada = document.getElementById('entrada');
+    // Botón enviar
+    const elBtnEnviar = document.getElementById('btn-enviar');
+
+    // ===================== ESTADO EN MEMORIA =====================
+
+    // Instancia de Peer (nuestra identidad en la red de PeerJS)
+    let peer = null;
+    // Conexión de datos (DataChannel) con el otro usuario
+    let conexion = null;
+    // Único mensaje vivo: { elemento, intervalo }. NO hay array de historial.
+    let mensaje = null;
+    // Mi link de invitación (se guarda solo para el botón copiar)
+    let miLink = '';
+
+    // Lee los parámetros de la URL actual
+    const parametros = new URLSearchParams(window.location.search);
+    // Obtiene el ID al que hay que unirse (o null si no hay ?join=)
+    const idParaUnirse = parametros.get('join');
+
+    // ===================== FUNCIONES DE INTERFAZ =====================
+
+    // Cambia el texto y el color del indicador de estado
+    function ponerEstado(texto, tipo) {
+      // Escribe el texto (textContent evita inyección de HTML)
+      elEstadoTexto.textContent = texto;
+      // Quita las clases de color anteriores
+      elEstado.classList.remove('conectado', 'error');
+      // Si se pasó un tipo, agrega la clase correspondiente
+      if (tipo) elEstado.classList.add(tipo);
+    }
+
+    // Habilita o deshabilita el input y el botón de enviar
+    function habilitarChat(habilitado) {
+      // Activa/desactiva el campo de texto
+      elEntrada.disabled = !habilitado;
+      // Activa/desactiva el botón
+      elBtnEnviar.disabled = !habilitado;
+      // Si se habilitó, pone el foco en el input para escribir directo
+      if (habilitado) elEntrada.focus();
+    }
+
+    // Muestra un mensaje en pantalla con su cuenta regresiva
+    function mostrarMensaje(texto, deQuien) {
+      // Si ya hay un mensaje vivo, lo quema rápido para que solo haya uno
+      if (mensaje) destruirMensaje(true);
+
+      // Oculta el texto de "sin mensajes"
+      elVacio.classList.add('oculto');
+
+      // Crea el div de la burbuja
+      const burbuja = document.createElement('div');
+      // Le asigna la clase base y la de propio/ajeno
+      burbuja.className = 'burbuja ' + (deQuien === 'yo' ? 'mia' : 'suya');
+      // Inserta el texto de forma segura (nunca innerHTML con datos del otro)
+      burbuja.textContent = texto;
+
+      // Crea el círculo del contador
+      const contador = document.createElement('span');
+      // Le asigna su clase
+      contador.className = 'contador';
+      // Empieza mostrando 5
+      contador.textContent = SEGUNDOS_DE_VIDA;
+      // Lo agrega dentro de la burbuja
+      burbuja.appendChild(contador);
+
+      // Crea la barra de progreso
+      const barra = document.createElement('span');
+      // Le asigna su clase (la animación CSS dura 5s)
+      barra.className = 'barra';
+      // La agrega dentro de la burbuja
+      burbuja.appendChild(barra);
+
+      // Inserta la burbuja en el escenario
+      elEscenario.appendChild(burbuja);
+
+      // Segundos restantes de este mensaje
+      let restantes = SEGUNDOS_DE_VIDA;
+      // Cada 1 segundo descuenta y actualiza el contador
+      const intervalo = setInterval(function () {
+        // Resta un segundo
+        restantes--;
+        // Si todavía queda tiempo…
+        if (restantes > 0) {
+          // …muestra el nuevo número
+          contador.textContent = restantes;
+          // Con 2 segundos o menos marca el contador como urgente
+          if (restantes <= 2) contador.classList.add('urgente');
+        } else {
+          // Se acabó el tiempo: quema el mensaje
+          destruirMensaje(false);
+        }
+      }, 1000);
+
+      // Guarda la referencia del único mensaje vivo
+      mensaje = { elemento: burbuja, intervalo: intervalo };
+    }
+
+    // Quema y elimina del DOM el mensaje actual
+    function destruirMensaje(rapido) {
+      // Si no hay mensaje, no hace nada
+      if (!mensaje) return;
+
+      // Copia la referencia al elemento antes de soltar el objeto
+      const elemento = mensaje.elemento;
+      // Detiene la cuenta regresiva
+      clearInterval(mensaje.intervalo);
+      // Borra la referencia: el mensaje deja de existir en memoria
+      mensaje = null;
+
+      // Activa la animación de quemado
+      elemento.classList.add('quemando');
+      // Si es un reemplazo, usa la versión rápida
+      if (rapido) elemento.classList.add('rapido');
+
+      // Función que elimina definitivamente el nodo
+      const eliminar = function () {
+        // Si el nodo sigue en el DOM, lo quita
+        if (elemento.isConnected) elemento.remove();
+        // Si no quedó ningún mensaje vivo, vuelve a mostrar el texto vacío
+        if (!mensaje) elVacio.classList.remove('oculto');
+      };
+
+      // Elimina el nodo al terminar la animación de quemado (solo la de la burbuja)
+      elemento.addEventListener('animationend', function (e) {
+        // Ignora animaciones de los hijos o del ::after
+        if (e.target === elemento && e.animationName === 'quemar') eliminar();
+      });
+      // Respaldo por si animationend no se dispara (pestaña en segundo plano, etc.)
+      setTimeout(eliminar, rapido ? 400 : 1000);
+    }
+
+    // Cambia el texto de ayuda que se ve cuando no hay mensajes
+    function textoVacio(texto) {
+      // Escribe el texto de ayuda
+      elVacio.textContent = texto;
+    }
+
+    // ===================== CONEXIÓN P2P =====================
+
+    // Configura todos los eventos de una conexión de datos
+    function configurarConexion(nuevaConexion) {
+      // Si ya estamos hablando con alguien, rechaza a un tercero
+      if (conexion && conexion.open) {
+        // Cierra la conexión entrante extra
+        nuevaConexion.close();
+        // No sigue configurando
+        return;
+      }
+
+      // Guarda la conexión como la conexión activa
+      conexion = nuevaConexion;
+
+      // Cuando el canal de datos queda abierto…
+      conexion.on('open', function () {
+        // Muestra el estado pedido en el enunciado
+        ponerEstado('Conectado - mensajes se autodestruyen en 5s', 'conectado');
+        // Oculta el panel del link (ya no hace falta)
+        elPanelLink.classList.add('oculto');
+        // Cambia el texto de ayuda
+        textoVacio('Escribí algo. Va a arder en 5 segundos.');
+        // Habilita el chat
+        habilitarChat(true);
+        // Toma la conexión WebRTC interna para vigilar si se cae la red
+        const pc = conexion.peerConnection;
+        // Si existe, escucha los cambios de estado ICE
+        if (pc) pc.addEventListener('iceconnectionstatechange', function () {
+          // Si quedó desconectada, fallida o cerrada, damos la charla por terminada
+          if (['disconnected', 'failed', 'closed'].includes(pc.iceConnectionState) && conexion) conexion.close();
+        });
+      });
+
+      // Cuando llega un dato del otro usuario…
+      conexion.on('data', function (datos) {
+        // Si es la señal de despedida, cerramos la conexión de nuestro lado
+        if (datos === SENAL_ADIOS) { conexion.close(); return; }
+        // Acepta solo texto (ignora cualquier otro tipo de dato)
+        if (typeof datos !== 'string') return;
+        // Quita espacios y recorta al largo máximo
+        const texto = datos.trim().slice(0, LARGO_MAXIMO);
+        // Si quedó vacío, lo ignora
+        if (!texto) return;
+        // Muestra el mensaje como "del otro"
+        mostrarMensaje(texto, 'otro');
+      });
+
+      // Cuando la conexión se cierra…
+      conexion.on('close', function () {
+        // Avisa que el otro se fue
+        ponerEstado('El otro usuario se desconectó', 'error');
+        // Deshabilita el chat
+        habilitarChat(false);
+        // Quema el mensaje que hubiera en pantalla
+        destruirMensaje(true);
+        // Suelta la referencia a la conexión
+        conexion = null;
+        // Vuelve a mostrar el link para que otro pueda entrar (si seguimos en la red)
+        if (miLink) elPanelLink.classList.remove('oculto');
+        // Texto de ayuda
+        textoVacio('Conversación terminada. Compartí el link para empezar otra.');
+      });
+
+      // Si la conexión tiene un error…
+      conexion.on('error', function (err) {
+        // Lo muestra en el estado
+        ponerEstado('Error en la conexión: ' + err.type, 'error');
+      });
+    }
+
+    // Arranca la app: crea el Peer y decide si espera o se conecta
+    function iniciar() {
+      // Verifica que PeerJS se haya cargado desde el CDN
+      if (typeof Peer === 'undefined') {
+        // Si no cargó, avisa (sin internet o CDN bloqueado)
+        ponerEstado('No se pudo cargar PeerJS (¿sin internet?)', 'error');
+        // Detiene la ejecución
+        return;
+      }
+
+      // Crea el Peer: el servidor público de PeerJS nos asigna un ID aleatorio
+      peer = new Peer();
+
+      // Cuando el servidor nos confirma el ID…
+      peer.on('open', function (id) {
+        // Arma la URL base sin parámetros ni hash (funciona también abriendo el archivo local)
+        const base = window.location.href.split(/[?#]/)[0];
+        // Arma el link de invitación con ?join=ID
+        miLink = base + '?join=' + encodeURIComponent(id);
+        // Muestra el link en pantalla
+        elUrl.textContent = miLink;
+
+        // Si la URL traía ?join=ID, nos conectamos a esa persona
+        if (idParaUnirse) {
+          // Estado mientras se conecta
+          ponerEstado('Conectando…');
+          // Texto de ayuda
+          textoVacio('Conectando con tu contacto…');
+          // Abre el DataChannel hacia el otro Peer (reliable = mensajes en orden y sin pérdida)
+          configurarConexion(peer.connect(idParaUnirse, { reliable: true }));
+        } else {
+          // Si no, mostramos el link y esperamos
+          elPanelLink.classList.remove('oculto');
+          // Estado de espera
+          ponerEstado('Esperando a que alguien se conecte…');
+        }
+      });
+
+      // Cuando alguien abre nuestro link y se conecta a nosotros…
+      peer.on('connection', function (conexionEntrante) {
+        // Configura esa conexión
+        configurarConexion(conexionEntrante);
+      });
+
+      // Si perdemos contacto con el servidor de signaling…
+      peer.on('disconnected', function () {
+        // …y el Peer no fue destruido a propósito, intenta reconectar
+        if (peer && !peer.destroyed) peer.reconnect();
+      });
+
+      // Manejo de errores del Peer
+      peer.on('error', function (err) {
+        // El ID al que queremos unirnos no existe (o la otra pestaña se cerró)
+        if (err.type === 'peer-unavailable') {
+          // Mensaje claro para el usuario
+          ponerEstado('El link no es válido o la otra persona ya se fue', 'error');
+          // Texto de ayuda
+          textoVacio('Pedí un link nuevo o compartí el tuyo.');
+          // Muestra nuestro propio link como alternativa
+          if (miLink) elPanelLink.classList.remove('oculto');
+        } else {
+          // Cualquier otro error
+          ponerEstado('Error: ' + err.type, 'error');
+        }
+      });
+    }
+
+    // ===================== EVENTOS DE LA INTERFAZ =====================
+
+    // Al enviar el formulario (Enter o botón)…
+    elFormulario.addEventListener('submit', function (e) {
+      // Evita que la página se recargue
+      e.preventDefault();
+      // Toma el texto, sin espacios sobrantes y con el largo máximo
+      const texto = elEntrada.value.trim().slice(0, LARGO_MAXIMO);
+      // Si está vacío o no hay conexión abierta, no hace nada
+      if (!texto || !conexion || !conexion.open) return;
+      // Envía el texto por el DataChannel directo al otro navegador
+      conexion.send(texto);
+      // Lo muestra en nuestra pantalla como propio
+      mostrarMensaje(texto, 'yo');
+      // Limpia el input
+      elEntrada.value = '';
+      // Mantiene el foco para seguir escribiendo
+      elEntrada.focus();
+    });
+
+    // Al tocar "Copiar link"…
+    elBtnCopiar.addEventListener('click', async function () {
+      // Si no hay link todavía, no hace nada
+      if (!miLink) return;
+      // Intenta copiar o compartir
+      try {
+        // En móviles con menú nativo de compartir, lo usa
+        if (navigator.share && /Mobi|Android/i.test(navigator.userAgent)) {
+          // Abre el menú de compartir del sistema
+          await navigator.share({ title: 'Chat efímero', url: miLink });
+        } else {
+          // En escritorio copia al portapapeles
+          await navigator.clipboard.writeText(miLink);
+          // Feedback visual
+          elBtnCopiar.textContent = '¡Copiado!';
+          // Vuelve al texto original a los 1.5 segundos
+          setTimeout(function () { elBtnCopiar.textContent = 'Copiar link'; }, 1500);
+        }
+      } catch (err) {
+        // Si falla (permiso denegado o compartir cancelado), pide copiarlo a mano
+        elBtnCopiar.textContent = 'Seleccioná y copiá el link';
+      }
+    });
+
+    // ===================== LIMPIEZA AL CERRAR =====================
+
+    // Destruye todo cuando se cierra o se oculta definitivamente la pestaña
+    function destruirTodo() {
+      // Quema/borra el mensaje vivo
+      if (mensaje) destruirMensaje(true);
+      // Avisa al otro que nos vamos (así su pantalla se actualiza al instante)
+      if (conexion && conexion.open) { try { conexion.send(SENAL_ADIOS); } catch (e) { /* si falla, no importa */ } }
+      // Cierra el DataChannel
+      if (conexion) conexion.close();
+      // Destruye el Peer (libera el ID en el servidor)
+      if (peer && !peer.destroyed) peer.destroy();
+      // Suelta todas las referencias
+      conexion = null;
+      // Suelta el Peer
+      peer = null;
+    }
+
+    // pagehide funciona mejor que beforeunload en móviles (iOS/Android)
+    window.addEventListener('pagehide', destruirTodo);
+    // beforeunload como respaldo en escritorio
+    window.addEventListener('beforeunload', destruirTodo);
+
+    // ===================== ARRANQUE =====================
+
+    // Inicia la app
+    iniciar();
+  </script>
+  <!-- Fin de la lógica -->
+</body>
+</html>
