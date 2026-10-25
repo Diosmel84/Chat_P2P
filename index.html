@@ -459,6 +459,8 @@
 
     /* Barra inferior con el input */
     .barra-input {
+      /* Contexto para posicionar el indicador de grabación y los avisos */
+      position: relative;
       /* Elementos en fila */
       display: flex;
       /* Separación entre input y botón */
@@ -533,6 +535,192 @@
       cursor: not-allowed;
     }
 
+    /* ===================== AUDIO ===================== */
+
+    /* Botón de micrófono (mantener apretado para grabar) */
+    .btn-micro {
+      /* Ancho fijo */
+      width: 40px;
+      /* Alto fijo */
+      height: 40px;
+      /* No se encoge */
+      flex-shrink: 0;
+      /* Círculo */
+      border-radius: 50%;
+      /* Fondo gris para diferenciarlo de enviar */
+      background: var(--gris);
+      /* Ícono blanco */
+      color: #fff;
+      /* Flex para centrar el ícono */
+      display: flex;
+      /* Centrado vertical */
+      align-items: center;
+      /* Centrado horizontal */
+      justify-content: center;
+      /* Evita que el navegador haga scroll o zoom al mantener apretado */
+      touch-action: none;
+      /* Evita que se seleccione texto al mantener apretado */
+      user-select: none;
+      /* Evita el menú de "copiar/guardar" de iOS al mantener apretado */
+      -webkit-touch-callout: none;
+      /* Transición suave al agrandarse */
+      transition: transform 0.15s, background 0.15s;
+    }
+
+    /* Botón de micrófono mientras se graba */
+    .btn-micro.grabando {
+      /* Fondo rojo */
+      background: var(--rojo);
+      /* Se agranda para que se note bajo el dedo */
+      transform: scale(1.25);
+    }
+
+    /* Botón de micrófono deshabilitado */
+    .btn-micro:disabled {
+      /* Más transparente */
+      opacity: 0.5;
+      /* Cursor de prohibido */
+      cursor: not-allowed;
+    }
+
+    /* Indicador "grabando" que tapa el input mientras se graba */
+    .indicador-grabacion {
+      /* Posición absoluta dentro de la barra del input */
+      position: absolute;
+      /* Mismo margen superior que la barra */
+      top: 8px;
+      /* Mismo margen inferior que la barra */
+      bottom: 12px;
+      /* Desde el borde izquierdo */
+      left: 0;
+      /* Deja libres los dos botones de la derecha (40 + 40 + separaciones) */
+      right: 96px;
+      /* Fondo igual al input */
+      background: var(--panel);
+      /* Borde rojo para indicar grabación */
+      border: 1px solid var(--rojo);
+      /* Forma de píldora */
+      border-radius: 999px;
+      /* Elementos en fila */
+      display: flex;
+      /* Centrado vertical */
+      align-items: center;
+      /* Separación entre punto, tiempo y ayuda */
+      gap: 8px;
+      /* Espacio interno lateral */
+      padding: 0 16px;
+      /* Tamaño de texto */
+      font-size: 15px;
+      /* No intercepta toques (el dedo sigue sobre el micrófono) */
+      pointer-events: none;
+    }
+
+    /* Punto rojo que parpadea mientras se graba */
+    .indicador-grabacion .punto-rojo {
+      /* Ancho */
+      width: 10px;
+      /* Alto */
+      height: 10px;
+      /* Círculo */
+      border-radius: 50%;
+      /* Rojo */
+      background: var(--rojo);
+      /* Parpadeo continuo */
+      animation: parpadeo 1s ease-in-out infinite;
+    }
+
+    /* Tiempo de grabación */
+    .indicador-grabacion .tiempo {
+      /* Números de ancho fijo */
+      font-variant-numeric: tabular-nums;
+      /* Negrita */
+      font-weight: 600;
+    }
+
+    /* Texto de ayuda "deslizá para cancelar" */
+    .indicador-grabacion .ayuda {
+      /* Empuja la ayuda hacia la derecha */
+      margin-left: auto;
+      /* Color gris */
+      color: var(--texto-suave);
+      /* Texto pequeño */
+      font-size: 13px;
+      /* No corta en dos líneas */
+      white-space: nowrap;
+    }
+
+    /* Aviso flotante breve (permiso denegado, audio muy corto, etc.) */
+    .aviso {
+      /* Posición absoluta sobre la barra del input */
+      position: absolute;
+      /* Justo encima de la barra */
+      bottom: 64px;
+      /* Centrado horizontal */
+      left: 50%;
+      /* Corrige el centrado */
+      transform: translateX(-50%);
+      /* Fondo gris oscuro */
+      background: var(--panel);
+      /* Borde sutil */
+      border: 1px solid var(--borde);
+      /* Texto claro */
+      color: var(--texto);
+      /* Forma de píldora */
+      border-radius: 999px;
+      /* Espacio interno */
+      padding: 8px 14px;
+      /* Texto pequeño */
+      font-size: 13px;
+      /* No corta en dos líneas */
+      white-space: nowrap;
+      /* No intercepta toques */
+      pointer-events: none;
+      /* Animación de entrada */
+      animation: aparecer 0.2s ease-out;
+    }
+
+    /* Botón "Escuchar" dentro de la burbuja de audio */
+    .btn-escuchar {
+      /* Fondo oscuro semitransparente */
+      background: rgba(0, 0, 0, 0.25);
+      /* Mismo color de texto que la burbuja */
+      color: inherit;
+      /* Forma de píldora */
+      border-radius: 999px;
+      /* Espacio interno */
+      padding: 6px 14px;
+      /* Tamaño del texto */
+      font-size: 15px;
+      /* Semi-negrita */
+      font-weight: 600;
+    }
+
+    /* Botón "Escuchar" ya usado */
+    .btn-escuchar:disabled {
+      /* Cursor normal */
+      cursor: default;
+    }
+
+    /* Nota "Se escucha una sola vez" */
+    .nota-audio {
+      /* En su propia línea */
+      display: block;
+      /* Texto pequeño */
+      font-size: 12px;
+      /* Más tenue */
+      opacity: 0.7;
+      /* Separación con el botón */
+      margin-top: 6px;
+    }
+
+    /* Parpadeo del punto rojo de grabación */
+    @keyframes parpadeo {
+      /* Visible al inicio y al final */
+      0%, 100% { opacity: 1; }
+      /* Casi invisible en la mitad */
+      50% { opacity: 0.2; }
+    }
+
     /* Respeta a quien pidió menos animaciones en su sistema */
     @media (prefers-reduced-motion: reduce) {
       /* Reduce la duración de casi todas las animaciones */
@@ -581,6 +769,22 @@
     <form id="formulario" class="barra-input" autocomplete="off">
       <!-- Campo de texto (deshabilitado hasta conectar) -->
       <input id="entrada" type="text" placeholder="Mensaje…" maxlength="500" disabled aria-label="Escribir mensaje">
+      <!-- Indicador que aparece encima del input mientras se graba un audio (oculto al inicio) -->
+      <div id="indicador-grabacion" class="indicador-grabacion oculto" aria-live="polite">
+        <!-- Punto rojo que parpadea -->
+        <span class="punto-rojo"></span>
+        <!-- Tiempo grabado, por ejemplo 0:05 -->
+        <span id="tiempo-grabacion" class="tiempo">0:00</span>
+        <!-- Ayuda para cancelar -->
+        <span class="ayuda">◀ deslizá para cancelar</span>
+      </div>
+      <!-- Aviso breve (permiso denegado, audio muy corto, etc.) -->
+      <div id="aviso" class="aviso oculto" role="status"></div>
+      <!-- Botón de micrófono: mantener apretado para grabar, soltar para enviar -->
+      <button id="btn-micro" class="btn-micro" type="button" disabled aria-label="Mantené apretado para grabar un audio">
+        <!-- Ícono SVG de micrófono -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5"/></svg>
+      </button>
       <!-- Botón enviar con ícono de flecha -->
       <button id="btn-enviar" class="btn-enviar" type="submit" disabled aria-label="Enviar">
         <!-- Ícono SVG de flecha hacia arriba -->
@@ -602,6 +806,16 @@
     const LARGO_MAXIMO = 500;
     // Señal interna que se envía al cerrar la pestaña (con caracteres que el input no genera)
     const SENAL_ADIOS = '\u0000__adios__\u0000';
+    // Duración máxima de un audio, en segundos
+    const DURACION_MAX_AUDIO = 30;
+    // Si nadie escucha el audio en este tiempo (segundos), se quema igual
+    const ESPERA_MAX_AUDIO = 60;
+    // Tamaño máximo aceptado para un audio (2 MB), para no recibir archivos gigantes
+    const BYTES_MAX_AUDIO = 2 * 1024 * 1024;
+    // Grabaciones más cortas que esto (segundos) se descartan (toque accidental)
+    const DURACION_MIN_AUDIO = 0.6;
+    // Píxeles que hay que deslizar el dedo hacia la izquierda para cancelar
+    const DESLIZAR_PARA_CANCELAR = 80;
 
     // ===================== REFERENCIAS AL DOM =====================
 
@@ -625,6 +839,14 @@
     const elEntrada = document.getElementById('entrada');
     // Botón enviar
     const elBtnEnviar = document.getElementById('btn-enviar');
+    // Botón de micrófono
+    const elBtnMicro = document.getElementById('btn-micro');
+    // Indicador "grabando"
+    const elIndicador = document.getElementById('indicador-grabacion');
+    // Tiempo que se muestra mientras se graba
+    const elTiempoGrabacion = document.getElementById('tiempo-grabacion');
+    // Aviso flotante
+    const elAviso = document.getElementById('aviso');
 
     // ===================== ESTADO EN MEMORIA =====================
 
@@ -636,6 +858,12 @@
     let mensaje = null;
     // Mi link de invitación (se guarda solo para el botón copiar)
     let miLink = '';
+    // Grabación en curso (o null si no se está grabando)
+    let grabacion = null;
+    // Temporizador que oculta el aviso flotante
+    let temporizadorAviso = null;
+    // ¿El navegador puede grabar audio? (micrófono + MediaRecorder)
+    const puedeGrabar = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
 
     // Lee los parámetros de la URL actual
     const parametros = new URLSearchParams(window.location.search);
@@ -660,12 +888,34 @@
       elEntrada.disabled = !habilitado;
       // Activa/desactiva el botón
       elBtnEnviar.disabled = !habilitado;
+      // Activa/desactiva el micrófono (solo si el navegador puede grabar)
+      elBtnMicro.disabled = !habilitado || !puedeGrabar;
       // Si se habilitó, pone el foco en el input para escribir directo
       if (habilitado) elEntrada.focus();
     }
 
-    // Muestra un mensaje en pantalla con su cuenta regresiva
-    function mostrarMensaje(texto, deQuien) {
+    // Muestra un aviso breve encima del input
+    function avisar(texto) {
+      // Escribe el texto del aviso
+      elAviso.textContent = texto;
+      // Lo muestra
+      elAviso.classList.remove('oculto');
+      // Cancela el ocultado anterior si había uno pendiente
+      clearTimeout(temporizadorAviso);
+      // Lo oculta a los 2.5 segundos
+      temporizadorAviso = setTimeout(function () { elAviso.classList.add('oculto'); }, 2500);
+    }
+
+    // Convierte segundos a formato m:ss (por ejemplo 65 → "1:05")
+    function formatoTiempo(segundos) {
+      // Redondea hacia abajo a segundos enteros (nunca negativo)
+      const total = Math.max(0, Math.floor(segundos));
+      // Minutos y segundos con dos dígitos
+      return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
+    }
+
+    // Crea una burbuja vacía y la convierte en el único mensaje vivo
+    function prepararBurbuja(deQuien) {
       // Si ya hay un mensaje vivo, lo quema rápido para que solo haya uno
       if (mensaje) destruirMensaje(true);
 
@@ -676,8 +926,32 @@
       const burbuja = document.createElement('div');
       // Le asigna la clase base y la de propio/ajeno
       burbuja.className = 'burbuja ' + (deQuien === 'yo' ? 'mia' : 'suya');
+      // Inserta la burbuja en el escenario
+      elEscenario.appendChild(burbuja);
+
+      // Guarda la referencia del único mensaje vivo (sin historial):
+      // intervalo = cuenta regresiva, espera = temporizador extra, limpiar = función para liberar recursos
+      mensaje = { elemento: burbuja, intervalo: null, espera: null, limpiar: null };
+      // Devuelve la burbuja para llenarla
+      return burbuja;
+    }
+
+    // Muestra un mensaje de texto con su cuenta regresiva
+    function mostrarMensaje(texto, deQuien) {
+      // Crea la burbuja (y quema la anterior si existía)
+      const burbuja = prepararBurbuja(deQuien);
       // Inserta el texto de forma segura (nunca innerHTML con datos del otro)
       burbuja.textContent = texto;
+      // Arranca el 5-4-3-2-1
+      iniciarCuentaRegresiva();
+    }
+
+    // Agrega el contador y la barra al mensaje vivo y arranca el 5-4-3-2-1
+    function iniciarCuentaRegresiva() {
+      // Si no hay mensaje vivo o ya está contando, no hace nada
+      if (!mensaje || mensaje.intervalo) return;
+      // Burbuja del mensaje vivo
+      const burbuja = mensaje.elemento;
 
       // Crea el círculo del contador
       const contador = document.createElement('span');
@@ -694,9 +968,6 @@
       barra.className = 'barra';
       // La agrega dentro de la burbuja
       burbuja.appendChild(barra);
-
-      // Inserta la burbuja en el escenario
-      elEscenario.appendChild(burbuja);
 
       // Segundos restantes de este mensaje
       let restantes = SEGUNDOS_DE_VIDA;
@@ -716,8 +987,115 @@
         }
       }, 1000);
 
-      // Guarda la referencia del único mensaje vivo
-      mensaje = { elemento: burbuja, intervalo: intervalo };
+      // Guarda el intervalo para poder frenarlo al destruir
+      mensaje.intervalo = intervalo;
+    }
+
+    // Muestra un audio efímero. Si es mío, solo la confirmación; si es del otro, el botón "Escuchar"
+    function mostrarAudio(blob, duracion, deQuien) {
+      // Crea la burbuja (y quema la anterior si existía)
+      const burbuja = prepararBurbuja(deQuien);
+
+      // Audio propio: no se puede volver a escuchar, solo se confirma y se quema
+      if (deQuien === 'yo') {
+        // Texto de confirmación con la duración
+        burbuja.textContent = '🎤 Audio enviado · ' + formatoTiempo(duracion);
+        // Arranca el 5-4-3-2-1
+        iniciarCuentaRegresiva();
+        // No hay nada más que hacer
+        return;
+      }
+
+      // Referencia a este mensaje para saber si sigue siendo el vivo más tarde
+      const propio = mensaje;
+      // Crea una URL temporal en memoria para el audio recibido
+      let url = URL.createObjectURL(blob);
+      // Reproductor de audio (no se agrega al DOM, así no hay controles ni opción de descarga)
+      const audio = new Audio();
+      // Le indica que puede empezar a cargar el audio
+      audio.preload = 'auto';
+      // Le asigna la URL temporal
+      audio.src = url;
+
+      // Botón para escuchar
+      const boton = document.createElement('button');
+      // Le asigna su clase
+      boton.className = 'btn-escuchar';
+      // Tipo botón (no envía el formulario)
+      boton.type = 'button';
+      // Texto con la duración
+      boton.textContent = '▶️ Escuchar · ' + formatoTiempo(duracion);
+      // Lo agrega a la burbuja
+      burbuja.appendChild(boton);
+
+      // Nota aclaratoria
+      const nota = document.createElement('span');
+      // Le asigna su clase
+      nota.className = 'nota-audio';
+      // Texto de la nota
+      nota.textContent = 'Se escucha una sola vez';
+      // La agrega a la burbuja
+      burbuja.appendChild(nota);
+
+      // Al destruir el mensaje: frena el audio y libera la memoria
+      propio.limpiar = function () {
+        // Frena la reproducción
+        audio.pause();
+        // Quita la fuente del reproductor
+        audio.removeAttribute('src');
+        // Fuerza al reproductor a soltar el audio
+        audio.load();
+        // Libera la URL temporal (el audio desaparece de la memoria)
+        if (url) URL.revokeObjectURL(url);
+        // Suelta la referencia
+        url = null;
+      };
+
+      // Si nadie lo escucha en ESPERA_MAX_AUDIO segundos, se quema igual
+      propio.espera = setTimeout(function () {
+        // Solo si sigue siendo el mensaje vivo
+        if (mensaje === propio) destruirMensaje(false);
+      }, ESPERA_MAX_AUDIO * 1000);
+
+      // Pasa a la cuenta regresiva (después de escuchar o si falla la reproducción)
+      const terminar = function (textoFinal) {
+        // Si ya no es el mensaje vivo, no hace nada
+        if (mensaje !== propio) return;
+        // Cancela cualquier temporizador de espera
+        clearTimeout(propio.espera);
+        // Cambia el texto del botón
+        boton.textContent = textoFinal;
+        // Arranca el 5-4-3-2-1
+        iniciarCuentaRegresiva();
+      };
+
+      // Mientras suena, muestra los segundos que faltan
+      audio.addEventListener('timeupdate', function () {
+        // Usa la duración real si el navegador la conoce; si no, la que mandó el otro
+        const total = isFinite(audio.duration) ? audio.duration : duracion;
+        // Actualiza el texto del botón
+        boton.textContent = '🔊 ' + formatoTiempo(total - audio.currentTime);
+      });
+      // Cuando termina de sonar, arranca la autodestrucción
+      audio.addEventListener('ended', function () { terminar('✓ Escuchado'); });
+      // Si el navegador no puede reproducirlo, avisa y lo quema
+      audio.addEventListener('error', function () { terminar('⚠️ Tu navegador no puede reproducir este audio'); });
+
+      // Al tocar "Escuchar"…
+      boton.addEventListener('click', function () {
+        // Se deshabilita: se escucha una sola vez
+        boton.disabled = true;
+        // Cancela la espera de 60 segundos
+        clearTimeout(propio.espera);
+        // Respaldo por si el evento "ended" nunca llega (duración + 10 segundos)
+        propio.espera = setTimeout(function () { terminar('✓ Escuchado'); }, (duracion + 10) * 1000);
+        // Muestra que está sonando
+        boton.textContent = '🔊 ' + formatoTiempo(duracion);
+        // Reproduce (play devuelve una promesa que puede fallar)
+        const promesa = audio.play();
+        // Si falla, avisa y lo quema
+        if (promesa) promesa.catch(function () { terminar('⚠️ No se pudo reproducir'); });
+      });
     }
 
     // Quema y elimina del DOM el mensaje actual
@@ -729,6 +1107,10 @@
       const elemento = mensaje.elemento;
       // Detiene la cuenta regresiva
       clearInterval(mensaje.intervalo);
+      // Detiene cualquier temporizador extra (espera de audio)
+      clearTimeout(mensaje.espera);
+      // Libera recursos extra (por ejemplo, el audio en memoria)
+      if (mensaje.limpiar) mensaje.limpiar();
       // Borra la referencia: el mensaje deja de existir en memoria
       mensaje = null;
 
@@ -798,6 +1180,8 @@
       conexion.on('data', function (datos) {
         // Si es la señal de despedida, cerramos la conexión de nuestro lado
         if (datos === SENAL_ADIOS) { conexion.close(); return; }
+        // Si es un objeto de tipo audio, lo valida y lo muestra
+        if (datos && typeof datos === 'object' && datos.tipo === 'audio') { recibirAudio(datos); return; }
         // Acepta solo texto (ignora cualquier otro tipo de dato)
         if (typeof datos !== 'string') return;
         // Quita espacios y recorta al largo máximo
@@ -816,6 +1200,8 @@
         habilitarChat(false);
         // Quema el mensaje que hubiera en pantalla
         destruirMensaje(true);
+        // Si estábamos grabando un audio, lo cancela
+        soltarGrabacion(true);
         // Suelta la referencia a la conexión
         conexion = null;
         // Vuelve a mostrar el link para que otro pueda entrar (si seguimos en la red)
@@ -942,12 +1328,221 @@
       }
     });
 
+    // ===================== AUDIOS EFÍMEROS =====================
+
+    // Elige un formato de grabación que entiendan tanto iPhone como Android
+    function elegirFormato() {
+      // Orden de preferencia: AAC en MP4 (lo reproduce todo) y, si no, Opus en WebM
+      const candidatos = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
+      // Devuelve el primero que el navegador sepa grabar
+      for (const tipo of candidatos) {
+        // isTypeSupported indica si MediaRecorder puede grabar en ese formato
+        if (MediaRecorder.isTypeSupported(tipo)) return tipo;
+      }
+      // Si ninguno, deja que el navegador use su formato por defecto
+      return '';
+    }
+
+    // Empieza a grabar (al apretar el micrófono)
+    async function empezarGrabacion() {
+      // Si ya se está grabando, o no hay conexión, no hace nada
+      if (grabacion || !conexion || !conexion.open) return;
+      // Crea el estado de esta grabación (todavía esperando permiso del micrófono)
+      const actual = { estado: 'pidiendo', cancelada: false, soltado: false, partes: [] };
+      // La marca como la grabación en curso
+      grabacion = actual;
+
+      // Pide acceso al micrófono
+      let stream;
+      // getUserMedia puede fallar si se niega el permiso
+      try {
+        // Solo audio, con cancelación de eco y supresión de ruido
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      } catch (err) {
+        // Sin permiso: libera el estado
+        grabacion = null;
+        // Avisa al usuario
+        avisar('Necesito permiso del micrófono para grabar');
+        // Termina
+        return;
+      }
+
+      // Si soltó el dedo mientras aparecía el cartel de permiso, no grabamos
+      if (actual.soltado || grabacion !== actual) {
+        // Apaga el micrófono
+        stream.getTracks().forEach(function (pista) { pista.stop(); });
+        // Libera el estado si sigue siendo el nuestro
+        if (grabacion === actual) grabacion = null;
+        // Explica cómo se usa
+        avisar('Mantené apretado el micrófono para grabar');
+        // Termina
+        return;
+      }
+
+      // Elige el formato
+      const formato = elegirFormato();
+      // Opciones: 64 kbps es buena calidad de voz y poco peso
+      const opciones = formato ? { mimeType: formato, audioBitsPerSecond: 64000 } : { audioBitsPerSecond: 64000 };
+      // Crea el grabador
+      const grabador = new MediaRecorder(stream, opciones);
+
+      // Guarda el micrófono para apagarlo después
+      actual.stream = stream;
+      // Guarda el grabador
+      actual.grabador = grabador;
+      // Marca la hora de inicio
+      actual.inicio = Date.now();
+      // Ahora sí está grabando
+      actual.estado = 'grabando';
+
+      // Cada trozo de audio grabado se junta en "partes" (solo de esta grabación)
+      grabador.addEventListener('dataavailable', function (e) {
+        // Ignora trozos vacíos
+        if (e.data && e.data.size > 0 && actual.partes) actual.partes.push(e.data);
+      });
+      // Cuando el grabador se detiene, se procesa el audio
+      grabador.addEventListener('stop', function () { finalizarGrabacion(actual); });
+      // Arranca la grabación
+      grabador.start();
+
+      // Muestra el indicador "grabando"
+      elIndicador.classList.remove('oculto');
+      // Pone el micrófono en rojo
+      elBtnMicro.classList.add('grabando');
+      // Reinicia el tiempo mostrado
+      elTiempoGrabacion.textContent = '0:00';
+      // Actualiza el tiempo en pantalla 4 veces por segundo
+      actual.reloj = setInterval(function () {
+        // Segundos transcurridos
+        elTiempoGrabacion.textContent = formatoTiempo((Date.now() - actual.inicio) / 1000);
+      }, 250);
+      // Al llegar al máximo, se envía solo
+      actual.limite = setTimeout(function () { soltarGrabacion(false); }, DURACION_MAX_AUDIO * 1000);
+    }
+
+    // Termina la grabación: cancelar = true la descarta, false la envía
+    function soltarGrabacion(cancelar) {
+      // Grabación en curso
+      const actual = grabacion;
+      // Si no hay ninguna, no hace nada
+      if (!actual) return;
+      // Marca que el dedo ya se soltó
+      actual.soltado = true;
+      // Marca si hay que descartarla
+      if (cancelar) actual.cancelada = true;
+      // Si todavía estaba pidiendo permiso, empezarGrabacion se encarga
+      if (actual.estado !== 'grabando') return;
+      // Pasa a estado "deteniendo" para no detener dos veces
+      actual.estado = 'deteniendo';
+      // Frena el reloj en pantalla
+      clearInterval(actual.reloj);
+      // Frena el límite de 30 segundos
+      clearTimeout(actual.limite);
+      // Oculta el indicador
+      elIndicador.classList.add('oculto');
+      // Vuelve el micrófono a gris
+      elBtnMicro.classList.remove('grabando');
+      // Detiene el grabador (dispara "stop" → finalizarGrabacion)
+      actual.grabador.stop();
+    }
+
+    // Procesa el audio grabado y lo envía (o lo descarta)
+    function finalizarGrabacion(actual) {
+      // Apaga el micrófono (se apaga la luz/indicador del sistema)
+      actual.stream.getTracks().forEach(function (pista) { pista.stop(); });
+      // Ya no hay grabación en curso
+      if (grabacion === actual) grabacion = null;
+
+      // Duración real en segundos
+      const duracion = (Date.now() - actual.inicio) / 1000;
+      // Formato real que usó el grabador
+      const tipo = actual.grabador.mimeType || 'audio/webm';
+      // Une todos los trozos en un solo archivo en memoria
+      const blob = new Blob(actual.partes, { type: tipo });
+      // Suelta los trozos
+      actual.partes = null;
+
+      // Si se canceló, se descarta
+      if (actual.cancelada) { avisar('Audio cancelado'); return; }
+      // Si fue un toque accidental, se descarta
+      if (duracion < DURACION_MIN_AUDIO) { avisar('Mantené apretado para grabar'); return; }
+      // Si se cortó la conexión mientras grababa, se descarta
+      if (!conexion || !conexion.open) return;
+      // Si pesa demasiado (no debería con 30 s a 64 kbps), se descarta
+      if (blob.size > BYTES_MAX_AUDIO) { avisar('El audio es demasiado largo'); return; }
+
+      // Convierte el audio a bytes para mandarlo por el DataChannel
+      blob.arrayBuffer().then(function (bytes) {
+        // Verifica de nuevo que la conexión siga abierta
+        if (!conexion || !conexion.open) return;
+        // Envía un objeto con tipo, formato, duración y los bytes
+        conexion.send({ tipo: 'audio', formato: tipo, duracion: Math.round(duracion * 10) / 10, datos: bytes });
+        // Muestra la confirmación en nuestra pantalla
+        mostrarAudio(null, duracion, 'yo');
+      });
+    }
+
+    // Valida un audio que llegó del otro usuario y lo muestra
+    function recibirAudio(datos) {
+      // Los bytes pueden llegar como ArrayBuffer o como vista (Uint8Array)
+      const bytes = datos.datos;
+      // Si no son bytes, se ignora
+      if (!(bytes instanceof ArrayBuffer) && !ArrayBuffer.isView(bytes)) return;
+      // Si pesan demasiado, se ignora
+      if (bytes.byteLength > BYTES_MAX_AUDIO) return;
+      // El formato tiene que ser un texto corto que empiece con "audio/"
+      if (typeof datos.formato !== 'string' || datos.formato.length > 60 || !datos.formato.startsWith('audio/')) return;
+      // La duración tiene que ser un número razonable
+      const duracion = Number(datos.duracion);
+      // Si no es válida, se ignora
+      if (!isFinite(duracion) || duracion < 0 || duracion > DURACION_MAX_AUDIO + 5) return;
+      // Arma el audio en memoria
+      const blob = new Blob([bytes], { type: datos.formato });
+      // Lo muestra como "del otro"
+      mostrarAudio(blob, duracion, 'otro');
+    }
+
+    // Posición X donde se apoyó el dedo (para detectar "deslizar para cancelar")
+    let inicioToqueX = 0;
+
+    // Al apoyar el dedo (o el mouse) sobre el micrófono…
+    elBtnMicro.addEventListener('pointerdown', function (e) {
+      // Si está deshabilitado, no hace nada
+      if (elBtnMicro.disabled) return;
+      // Evita el foco y la selección
+      e.preventDefault();
+      // Captura el puntero: los eventos siguen llegando aunque el dedo salga del botón
+      try { elBtnMicro.setPointerCapture(e.pointerId); } catch (err) { /* algunos navegadores viejos no lo soportan */ }
+      // Guarda dónde se apoyó
+      inicioToqueX = e.clientX;
+      // Empieza a grabar
+      empezarGrabacion();
+    });
+
+    // Al mover el dedo…
+    elBtnMicro.addEventListener('pointermove', function (e) {
+      // Si se deslizó lo suficiente hacia la izquierda, cancela
+      if (grabacion && inicioToqueX - e.clientX > DESLIZAR_PARA_CANCELAR) soltarGrabacion(true);
+    });
+
+    // Al levantar el dedo, se envía
+    elBtnMicro.addEventListener('pointerup', function () { soltarGrabacion(false); });
+    // Si el sistema interrumpe el toque (llamada entrante, etc.), se cancela
+    elBtnMicro.addEventListener('pointercancel', function () { soltarGrabacion(true); });
+    // Evita el menú contextual al mantener apretado en móviles
+    elBtnMicro.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+    // Si el navegador no puede grabar, el botón lo explica al tocarlo
+    if (!puedeGrabar) elBtnMicro.title = 'Tu navegador no permite grabar audio';
+
     // ===================== LIMPIEZA AL CERRAR =====================
 
     // Destruye todo cuando se cierra o se oculta definitivamente la pestaña
     function destruirTodo() {
       // Quema/borra el mensaje vivo
       if (mensaje) destruirMensaje(true);
+      // Cancela cualquier grabación en curso y apaga el micrófono
+      soltarGrabacion(true);
       // Avisa al otro que nos vamos (así su pantalla se actualiza al instante)
       if (conexion && conexion.open) { try { conexion.send(SENAL_ADIOS); } catch (e) { /* si falla, no importa */ } }
       // Cierra el DataChannel
