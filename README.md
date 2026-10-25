@@ -1,4 +1,4 @@
-# 🔥 Chat Efímero P2P
+# 🐍 Yarareando · Chat Efímero P2P
 
 Un chat entre dos personas que **se conecta directo de navegador a navegador** (P2P) y donde **cada mensaje se autodestruye a los 5 segundos**. Además de texto, permite mandar **audios que se escuchan una sola vez** y **fotos que se ven una sola vez**. Todo está en un solo archivo, `index.html`: no usa backend, ni npm, ni pasos de build.
 
@@ -37,6 +37,7 @@ Un chat entre dos personas que **se conecta directo de navegador a navegador** (
 | 1 mensaje a la vez | Si llega otro, el anterior se quema rápido antes de mostrar el nuevo |
 | Cerrar pestaña = destruir todo | `pagehide`/`beforeunload` cierran la conexión y destruyen el Peer. No usa `localStorage` |
 | Diseño | Modo oscuro, mobile first, centrado, burbujas estilo iMessage, animación de quemado |
+| Logo | Logo de **Yarareando** arriba de todo. Se achica durante la charla para dejar más lugar al mensaje |
 | Audios efímeros | Mantener apretado 🎤 para grabar (máx. 30 s). Se escuchan **una sola vez** y después se queman |
 | Fotos "ver una vez" | Botón 📷 (cámara o galería). Se ven **manteniendo apretado**, una sola vez, durante 5 s, y después se queman |
 | Anti-captura | Foto solo visible con el dedo apoyado, desenfoque al perder el foco y marca de agua con código y hora |
@@ -102,9 +103,16 @@ El `index.html` tiene tres partes, y está comentado **línea por línea en espa
 - Carga de PeerJS desde `https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js`.
 - `<style>` con variables de color (`:root`), las burbujas, el contador, la barra de progreso y las animaciones `aparecer`, `vaciar`, `latido`, `quemar` y `llamas`.
 
+### El logo
+- Va **incrustado en base64** (`data:image/webp;base64,...`) dentro del `<img class="logo">`, así el proyecto sigue siendo **un solo archivo**.
+- Se adaptó al modo oscuro: el original tiene líneas verde oscuro sobre fondo blanco. Se recortó el margen, el fondo blanco pasó a ser **transparente** y las líneas a **verde claro** (`rgb(150, 230, 170)`). Quedó en 360×358 px y 37 KB.
+- Ancho adaptable: `clamp(110px, 34vw, 160px)`. Durante la charla la clase `.en-charla` lo achica a `clamp(72px, 22vw, 96px)`.
+- **Para cambiarlo:** convertí la imagen nueva a base64 (por ejemplo en <https://base64.guru/converter/encode/image>) y reemplazá el `src` del `<img class="logo">`.
+
 ### 2. `<body>`: la estructura visual
 | Elemento | Función |
 |---|---|
+| `.logo` | Logo de Yarareando (imagen WebP incrustada en base64) |
 | `#estado` | Punto de color + texto del estado de la conexión |
 | `#panel-link` | "Tu link para chatear:", la URL y el botón copiar |
 | `#escenario` | Zona donde vive **el único mensaje** visible |
