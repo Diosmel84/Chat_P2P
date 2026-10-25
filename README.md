@@ -15,10 +15,11 @@ Un chat entre dos personas que **se conecta directo de navegador a navegador** (
 5. [Ciclo de vida de un mensaje](#ciclo-de-vida-de-un-mensaje)
 6. [Audios efímeros](#audios-efímeros)
 7. [Fotos "ver una vez"](#fotos-ver-una-vez)
-8. [Privacidad y seguridad](#privacidad-y-seguridad)
-9. [Publicarlo en internet](#publicarlo-en-internet)
-10. [Limitaciones conocidas](#limitaciones-conocidas)
-11. [Personalización rápida](#personalización-rápida)
+8. [Medidas anti-captura](#medidas-anti-captura)
+9. [Privacidad y seguridad](#privacidad-y-seguridad)
+10. [Publicarlo en internet](#publicarlo-en-internet)
+11. [Limitaciones conocidas](#limitaciones-conocidas)
+12. [Personalización rápida](#personalización-rápida)
 
 ---
 
@@ -37,7 +38,8 @@ Un chat entre dos personas que **se conecta directo de navegador a navegador** (
 | Cerrar pestaña = destruir todo | `pagehide`/`beforeunload` cierran la conexión y destruyen el Peer. No usa `localStorage` |
 | Diseño | Modo oscuro, mobile first, centrado, burbujas estilo iMessage, animación de quemado |
 | Audios efímeros | Mantener apretado 🎤 para grabar (máx. 30 s). Se escuchan **una sola vez** y después se queman |
-| Fotos "ver una vez" | Botón 📷 (cámara o galería). Se ven **una sola vez**, durante 5 s, y después se queman |
+| Fotos "ver una vez" | Botón 📷 (cámara o galería). Se ven **manteniendo apretado**, una sola vez, durante 5 s, y después se queman |
+| Anti-captura | Foto solo visible con el dedo apoyado, desenfoque al perder el foco y marca de agua con código y hora |
 
 ---
 
@@ -132,7 +134,10 @@ El `index.html` tiene tres partes, y está comentado **línea por línea en espa
 | `comprimirFoto(archivo)` | Achica a 1280 px, recomprime a JPEG 80 % y borra los metadatos |
 | `enviarFoto(archivo)` | Valida, comprime y envía la foto por el DataChannel |
 | `recibirFoto(datos)` | Valida la foto recibida (bytes, peso, formato permitido) y la muestra |
-| `mostrarFoto(blob, deQuien)` | Foto propia: "📷 Foto enviada". Foto ajena: botón "👁 Ver foto" de un solo uso |
+| `mostrarFoto(blob, deQuien)` | Foto propia: "📷 Foto enviada". Foto ajena: tapada, se ve solo mientras se mantiene apretada |
+| `dibujarConMarcaDeAgua(img)` | Dibuja la foto en un `<canvas>` con la marca de agua diagonal repetida |
+| `codigoSesion()` | Código corto de quien mira (primeros 6 caracteres de su ID de Peer) |
+| `desenfocar()` / `enfocar()` | Agregan o quitan la clase `desenfocado` del `<body>` |
 | `avisar(texto)` / `formatoTiempo(seg)` | Utilidades: cartel breve y formato `m:ss` |
 | `ponerEstado(texto, tipo)` | Cambia el texto y el color del estado |
 | `habilitarChat(bool)` | Activa o desactiva el input y el botón |
@@ -228,8 +233,9 @@ recibirAudio() valida ──► new Blob ──► URL.createObjectURL ──►
 1. Tocá **📷**. En el celular podés **sacar una foto** o **elegir una de la galería**.
 2. La foto se procesa y se envía sola. Mientras tanto aparece "Enviando foto…".
 3. **Quien la manda** ve "📷 Foto enviada", con la cuenta regresiva de 5 s.
-4. **Quien la recibe** ve un botón **"👁 Ver foto"** y la nota *"Se ve una sola vez · 5 s"*. No hay vista previa.
-   - Al tocarlo se muestra la foto durante **5 segundos** (5-4-3-2-1) y se quema 🔥.
+4. **Quien la recibe** ve la foto **tapada** con el cartel **"👆 Mantené apretado para ver"** y la nota *"Se ve una sola vez · 5 s"*. No hay vista previa.
+   - La foto **solo se ve mientras el dedo está apoyado**. Al soltar, se vuelve a tapar.
+   - El primer toque arranca la cuenta de **5 segundos** (5-4-3-2-1). La cuenta sigue aunque sueltes, y al terminar la foto se quema 🔥.
    - Si no la abre en **60 segundos**, se quema igual.
    - Si **cambia de app o de pestaña** mientras la ve, se quema al instante. Así no queda en la vista de multitarea.
 
@@ -245,13 +251,41 @@ archivo elegido ──► <img> ──► <canvas> 1280 px máx. ──► JPEG 
 - El `<input type="file">` se limpia después de cada uso, así la foto no queda referenciada.
 
 ### Protecciones al mostrarla
-- El `<img>` tiene `pointer-events: none`, `draggable = false` y `-webkit-touch-callout: none`. Además se bloquea el menú contextual. Así no aparece "Guardar imagen" ni se puede arrastrar.
-- La imagen vive en una URL temporal (`blob:`) que se **revoca** al quemarse.
+- La foto se dibuja en un **`<canvas>`** en vez de un `<img>`: no existe "Guardar imagen como…" ni una URL para abrirla aparte.
+- La URL temporal (`blob:`) que se usa para decodificarla se **revoca enseguida**. Desde ese momento la foto solo existe en los píxeles del canvas.
+- Al quemarse, el canvas se vacía (`width = 0`) apenas termina la animación.
+- `pointer-events: none`, `-webkit-touch-callout: none` y el bloqueo del menú contextual evitan arrastrar o guardar.
 
 ### Validaciones al recibir
 - Los `datos` tienen que ser bytes de **3 MB como máximo**.
 - El `formato` tiene que ser `image/jpeg`, `image/png` o `image/webp`. **Nunca SVG**, que puede contener código.
 - Si algo no cumple, el mensaje se ignora en silencio.
+
+---
+
+## Medidas anti-captura
+
+> ⚠️ **Ninguna página web puede bloquear las capturas de pantalla.** La captura la hace el sistema operativo y el navegador ni se entera. Solo una app nativa de Android puede bloquearlas (`FLAG_SECURE`), y en iPhone ni siquiera eso. Estas medidas **dificultan y desalientan** las capturas, pero no las impiden.
+
+### 1. 👆 Mantener apretado para ver (fotos)
+- La foto está tapada y **solo se ve mientras el dedo (o el mouse) está apoyado**. En la PC también se puede mantener la **barra espaciadora**.
+- Sacar una captura con los botones del celular mientras se mantiene el dedo en la pantalla es incómodo. Además, muchos celulares cancelan el toque (`pointercancel`) al apretar los botones, y entonces la foto se tapa.
+- Eventos que tapan la foto: `pointerup`, `pointercancel`, `lostpointercapture`, `keyup` y `blur` del marco.
+
+### 2. 🌫️ Desenfoque al perder el foco (texto, audios y fotos)
+- Cuando la ventana pierde el foco, el `<body>` recibe la clase `desenfocado` y todas las burbujas se ven con `filter: blur(16px)`. Si había una foto destapada, se vuelve a tapar y no se puede destapar hasta volver.
+- Se activa con:
+  - **En la PC:** abrir la herramienta Recortes (**Win+Shift+S**), cambiar de ventana o hacer clic fuera.
+  - **En el celular:** bajar la cortina de notificaciones, cambiar de app o abrir la multitarea. Así la miniatura de la multitarea sale desenfocada.
+- Se quita al volver (`focus`) o al tocar la página.
+- Si la pestaña se oculta con una foto abierta, la foto **se quema al instante**.
+
+### 3. 🏷️ Marca de agua (fotos)
+- Sobre la foto se pinta en diagonal, repetido y semitransparente: **`🔥 Visto por FC136B · 25/10 15:42`**.
+  - `FC136B` es el **código de quien la está viendo** (las primeras letras de su ID de Peer).
+  - La fecha y la hora son las del momento en que llegó.
+- Se pinta **dentro de los píxeles** del canvas, así que no se puede quitar borrando un elemento de la página.
+- No impide la captura, pero la captura queda **marcada**: se sabe de qué sesión salió y cuándo. Eso desalienta compartirla.
 
 ---
 
@@ -297,7 +331,8 @@ Como es un único archivo estático, también se puede subir a cualquier hosting
 - Si la pestaña queda en **segundo plano**, el navegador puede retrasar los temporizadores; igual el respaldo con `setTimeout` asegura que el mensaje se borre.
 - **Audios:** necesitan un navegador con `MediaRecorder` (Chrome, Firefox, Edge, y Safari desde iOS 14.3). En navegadores viejos el botón 🎤 queda deshabilitado. Si un navegador muy viejo recibe un formato que no entiende, muestra "⚠️ Tu navegador no puede reproducir este audio" y lo quema.
 - **Fotos HEIC:** el iPhone las convierte a JPEG al elegirlas desde Safari o Chrome. Si algún navegador no puede leer una foto, aparece "No se pudo leer esa imagen".
-- **Fotos:** nadie puede impedir una **captura de pantalla** mientras se ve la foto. Ningún navegador web lo permite.
+- **Capturas:** nadie puede impedir una **captura de pantalla** ni que alguien le saque una foto a la pantalla con otro celular. Ver [Medidas anti-captura](#medidas-anti-captura).
+- **Desenfoque:** en algunos celulares, apretar los botones de captura no hace perder el foco, así que el desenfoque no se activa. En esos casos protege el "mantener apretado".
 - **Audios:** si se niega el permiso del micrófono, hay que habilitarlo desde la configuración del sitio en el navegador (🔒 en la barra de direcciones).
 
 ---

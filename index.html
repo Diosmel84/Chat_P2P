@@ -731,6 +731,100 @@
       -webkit-touch-callout: none;
       /* No recibe toques: no hay menú contextual ni arrastre sobre la imagen */
       pointer-events: none;
+      /* Oculta mientras no se mantenga apretado */
+      visibility: hidden;
+    }
+
+    /* ===================== ANTI-CAPTURA ===================== */
+
+    /* Marco de la foto: la zona que hay que mantener apretada */
+    .marco-foto {
+      /* Contexto para posicionar la tapa encima */
+      position: relative;
+      /* Tamaño mínimo mientras la foto carga */
+      min-width: 180px;
+      /* Alto mínimo mientras la foto carga */
+      min-height: 120px;
+      /* Esquinas redondeadas */
+      border-radius: 14px;
+      /* Recorta la tapa a las esquinas */
+      overflow: hidden;
+      /* Fondo negro debajo de la foto */
+      background: #000;
+      /* Sin scroll ni zoom al mantener apretado */
+      touch-action: none;
+      /* No se puede seleccionar */
+      user-select: none;
+      /* Igual en Safari */
+      -webkit-user-select: none;
+      /* Sin menú de iOS al mantener apretado */
+      -webkit-touch-callout: none;
+      /* Cursor de mano */
+      cursor: pointer;
+      /* Sin contorno azul al enfocar con el teclado (se marca con el borde) */
+      outline: none;
+    }
+
+    /* Borde visible cuando se enfoca con el teclado */
+    .marco-foto:focus-visible {
+      /* Borde azul */
+      box-shadow: 0 0 0 2px var(--azul);
+    }
+
+    /* Mientras se mantiene apretado, la foto se ve */
+    .marco-foto.viendo .foto-efimera {
+      /* Visible */
+      visibility: visible;
+    }
+
+    /* Tapa que cubre la foto */
+    .tapa-foto {
+      /* Cubre todo el marco */
+      position: absolute;
+      /* De borde a borde */
+      inset: 0;
+      /* Flex para centrar el texto */
+      display: flex;
+      /* Centrado vertical */
+      align-items: center;
+      /* Centrado horizontal */
+      justify-content: center;
+      /* Texto centrado */
+      text-align: center;
+      /* Espacio interno */
+      padding: 12px;
+      /* Tamaño de texto */
+      font-size: 15px;
+      /* Semi-negrita */
+      font-weight: 600;
+      /* Fondo oscuro con un toque de color */
+      background: linear-gradient(135deg, #2c2c2e, #1c1c1e);
+      /* Texto blanco */
+      color: #fff;
+    }
+
+    /* Mientras se mantiene apretado, la tapa desaparece */
+    .marco-foto.viendo .tapa-foto {
+      /* Oculta */
+      display: none;
+    }
+
+    /* Si la ventana pierde el foco (posible captura o cambio de app), se desenfocan los mensajes */
+    body.desenfocado .burbuja {
+      /* Desenfoque fuerte */
+      filter: blur(16px);
+    }
+
+    /* Y si había una foto destapada, se vuelve a tapar */
+    body.desenfocado .marco-foto .foto-efimera {
+      /* Oculta */
+      visibility: hidden;
+    }
+
+    /* Y la tapa vuelve a aparecer */
+    body.desenfocado .marco-foto .tapa-foto {
+      /* Visible */
+      display: flex;
     }
 
     /* Parpadeo del punto rojo de grabación */
@@ -1697,7 +1791,7 @@
       mostrarFoto(blob, 'otro');
     }
 
-    // Muestra una foto efímera. Si es mía, solo la confirmación; si es del otro, el botón "Ver foto"
+    // Muestra una foto efímera. Si es mía, solo la confirmación; si es del otro, se ve manteniendo apretado
     function mostrarFoto(blob, deQuien) {
       // Crea la burbuja (y quema la anterior si existía)
       const burbuja = prepararBurbuja(deQuien);
@@ -1714,21 +1808,30 @@
 
       // Referencia a este mensaje para saber si sigue siendo el vivo más tarde
       const propio = mensaje;
-      // URL temporal en memoria para la foto recibida
-      let url = URL.createObjectURL(blob);
-      // Elemento imagen (se crea recién al tocar "Ver foto")
-      let img = null;
+      // Lienzo donde se dibuja la foto con la marca de agua (se crea al terminar de cargar)
+      let lienzo = null;
+      // ¿Ya se empezó a ver? (la cuenta regresiva arranca con el primer toque)
+      let iniciada = false;
 
-      // Botón para ver la foto (mismo estilo que "Escuchar")
-      const boton = document.createElement('button');
+      // Marco que contiene la foto y la tapa (es la zona que hay que mantener apretada)
+      const marco = document.createElement('div');
       // Le asigna su clase
-      boton.className = 'btn-escuchar';
-      // Tipo botón (no envía el formulario)
-      boton.type = 'button';
-      // Texto del botón
-      boton.textContent = '👁 Ver foto';
+      marco.className = 'marco-foto';
+      // Se puede enfocar con el teclado (para usarlo con la barra espaciadora en la PC)
+      marco.tabIndex = 0;
+      // Descripción para lectores de pantalla
+      marco.setAttribute('aria-label', 'Foto efímera: mantené apretado para verla');
       // Lo agrega a la burbuja
-      burbuja.appendChild(boton);
+      burbuja.appendChild(marco);
+
+      // Tapa que cubre la foto cuando no se está apretando
+      const tapa = document.createElement('span');
+      // Le asigna su clase
+      tapa.className = 'tapa-foto';
+      // Texto mientras carga
+      tapa.textContent = 'Cargando foto…';
+      // La agrega al marco
+      marco.appendChild(tapa);
 
       // Nota aclaratoria
       const nota = document.createElement('span');
@@ -1742,15 +1845,14 @@
       // Evita el menú contextual (guardar imagen) sobre toda la burbuja
       burbuja.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
-      // Al destruir el mensaje: libera la memoria
-      // (la imagen ya dibujada sigue visible durante la animación de quemado y se va con la burbuja)
+      // Al destruir el mensaje: borra los píxeles de la foto
       propio.limpiar = function () {
-        // Libera la URL temporal (nadie más puede volver a abrir la foto)
-        if (url) URL.revokeObjectURL(url);
-        // Suelta las referencias
-        url = null;
-        // Suelta la imagen
-        img = null;
+        // Copia la referencia al lienzo
+        const l = lienzo;
+        // Suelta la referencia
+        lienzo = null;
+        // Borra los píxeles después de la animación de quemado (así se ve arder)
+        if (l) setTimeout(function () { l.width = 0; l.height = 0; }, 1000);
       };
 
       // Si nadie la abre en ESPERA_MAX_FOTO segundos, se quema igual
@@ -1759,47 +1861,160 @@
         if (mensaje === propio) destruirMensaje(false);
       }, ESPERA_MAX_FOTO * 1000);
 
-      // Al tocar "Ver foto"…
-      boton.addEventListener('click', function () {
-        // Se deshabilita: se ve una sola vez
-        boton.disabled = true;
+      // Decodifica la foto y la dibuja en un lienzo con la marca de agua
+      // (cargarImagen libera su URL temporal enseguida: después la foto solo existe en el lienzo)
+      cargarImagen(blob).then(function (img) {
+        // Si ya no es el mensaje vivo, no hace nada
+        if (mensaje !== propio) return;
+        // Dibuja la foto + marca de agua
+        lienzo = dibujarConMarcaDeAgua(img);
+        // Le asigna su clase
+        lienzo.className = 'foto-efimera';
+        // Lo agrega al marco, debajo de la tapa
+        marco.insertBefore(lienzo, tapa);
+        // Ahora indica cómo verla
+        tapa.textContent = '👆 Mantené apretado para ver';
+      }).catch(function () {
+        // Si ya no es el mensaje vivo, no hace nada
+        if (mensaje !== propio) return;
+        // Avisa en la tapa
+        tapa.textContent = '⚠️ No se pudo mostrar la foto';
         // Cancela la espera de 60 segundos
         clearTimeout(propio.espera);
-        // Crea la imagen
-        img = new Image();
-        // Le asigna su clase
-        img.className = 'foto-efimera';
-        // Texto alternativo
-        img.alt = 'Foto efímera';
-        // No se puede arrastrar
-        img.draggable = false;
-        // Cuando termina de cargar…
-        img.onload = function () {
-          // …si ya no es el mensaje vivo, no hace nada
-          if (mensaje !== propio || !img) return;
-          // Quita el botón
-          boton.remove();
-          // Quita la nota
-          nota.remove();
-          // Muestra la foto en la burbuja
-          burbuja.appendChild(img);
-          // Marca que hay una foto visible (para ocultarla si se cambia de app)
-          propio.fotoVisible = true;
-          // Arranca el 5-4-3-2-1
-          iniciarCuentaRegresiva();
-        };
-        // Si no se puede mostrar…
-        img.onerror = function () {
-          // …si ya no es el mensaje vivo, no hace nada
-          if (mensaje !== propio) return;
-          // Avisa en el botón
-          boton.textContent = '⚠️ No se pudo mostrar la foto';
-          // Y la quema
-          iniciarCuentaRegresiva();
-        };
-        // Empieza a cargar la foto desde la memoria
-        img.src = url;
+        // Y la quema
+        iniciarCuentaRegresiva();
       });
+
+      // Muestra la foto (mientras se mantiene apretado)
+      const mostrar = function () {
+        // Si todavía no cargó o ya no es el mensaje vivo, no hace nada
+        if (!lienzo || mensaje !== propio) return;
+        // Si la ventana está desenfocada (posible captura), no la muestra
+        if (document.body.classList.contains('desenfocado')) return;
+        // Destapa la foto
+        marco.classList.add('viendo');
+        // La primera vez arranca la autodestrucción
+        if (!iniciada) {
+          // Marca que ya empezó
+          iniciada = true;
+          // Cancela la espera de 60 segundos
+          clearTimeout(propio.espera);
+          // Marca que hay una foto abierta (para quemarla si se cambia de app)
+          propio.fotoVisible = true;
+          // Cambia el texto de la tapa
+          tapa.textContent = '👆 Mantené apretado';
+          // Arranca el 5-4-3-2-1 (corre aunque se suelte el dedo)
+          iniciarCuentaRegresiva();
+        }
+      };
+
+      // Tapa la foto (al soltar)
+      const tapar = function () {
+        // Vuelve a cubrir la foto
+        marco.classList.remove('viendo');
+      };
+
+      // Al apoyar el dedo (o el mouse) sobre la foto…
+      marco.addEventListener('pointerdown', function (e) {
+        // Evita selección y menús
+        e.preventDefault();
+        // Captura el puntero para recibir el "soltar" aunque el dedo se mueva
+        try { marco.setPointerCapture(e.pointerId); } catch (err) { /* navegadores viejos */ }
+        // Muestra la foto
+        mostrar();
+      });
+      // Al levantar el dedo, se tapa
+      marco.addEventListener('pointerup', tapar);
+      // Si el sistema interrumpe el toque (por ejemplo, al apretar los botones de captura), se tapa
+      marco.addEventListener('pointercancel', tapar);
+      // Si se pierde la captura del puntero, se tapa
+      marco.addEventListener('lostpointercapture', tapar);
+      // Con teclado: mantener la barra espaciadora o Enter
+      marco.addEventListener('keydown', function (e) {
+        // Solo esas dos teclas
+        if (e.key === ' ' || e.key === 'Enter') {
+          // Evita que la página haga scroll
+          e.preventDefault();
+          // Muestra la foto
+          mostrar();
+        }
+      });
+      // Al soltar la tecla, se tapa
+      marco.addEventListener('keyup', tapar);
+      // Si el marco pierde el foco, se tapa
+      marco.addEventListener('blur', tapar);
+    }
+
+    // Código corto que identifica a quien está viendo (las primeras letras de su ID de Peer)
+    function codigoSesion() {
+      // Si todavía no hay ID, guiones
+      if (!peer || !peer.id) return '------';
+      // Primeros 6 caracteres sin guiones, en mayúsculas
+      return peer.id.replace(/-/g, '').slice(0, 6).toUpperCase();
+    }
+
+    // Dibuja la foto en un lienzo y le pinta encima una marca de agua diagonal repetida
+    function dibujarConMarcaDeAgua(img) {
+      // Crea el lienzo
+      const lienzo = document.createElement('canvas');
+      // Mismo ancho que la foto
+      lienzo.width = img.naturalWidth;
+      // Mismo alto que la foto
+      lienzo.height = img.naturalHeight;
+      // Contexto 2D para dibujar
+      const ctx = lienzo.getContext('2d');
+      // Dibuja la foto
+      ctx.drawImage(img, 0, 0);
+
+      // Fecha y hora actuales
+      const ahora = new Date();
+      // Arma la fecha corta con dos dígitos (por ejemplo 25/10 14:32)
+      const fecha = String(ahora.getDate()).padStart(2, '0') + '/' + String(ahora.getMonth() + 1).padStart(2, '0') + ' ' +
+        String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
+      // Texto de la marca de agua
+      const texto = '🔥 Visto por ' + codigoSesion() + ' · ' + fecha;
+
+      // Tamaño de letra proporcional a la foto (mínimo 16 px)
+      const tamano = Math.max(16, Math.round(Math.max(lienzo.width, lienzo.height) / 32));
+      // Fuente en negrita
+      ctx.font = 'bold ' + tamano + 'px sans-serif';
+      // Relleno blanco semitransparente
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      // Borde negro semitransparente (para que se lea en fotos claras y oscuras)
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
+      // Grosor del borde
+      ctx.lineWidth = Math.max(1, tamano / 12);
+      // Ancho del texto más un espacio
+      const paso = ctx.measureText(texto).width + tamano * 2;
+      // Diagonal de la foto (para cubrirla entera aunque el texto esté girado)
+      const diagonal = Math.hypot(lienzo.width, lienzo.height);
+
+      // Guarda el estado del contexto
+      ctx.save();
+      // Mueve el origen al centro de la foto
+      ctx.translate(lienzo.width / 2, lienzo.height / 2);
+      // Gira -30 grados
+      ctx.rotate(-Math.PI / 6);
+      // Número de fila (para desfasar filas alternas)
+      let fila = 0;
+      // Recorre filas desde arriba hasta abajo
+      for (let y = -diagonal / 2; y < diagonal / 2; y += tamano * 4) {
+        // Desfasa las filas impares media palabra (patrón en ladrillo)
+        const desfase = (fila % 2) * (paso / 2);
+        // Recorre columnas de izquierda a derecha
+        for (let x = -diagonal / 2 - desfase; x < diagonal / 2; x += paso) {
+          // Borde del texto
+          ctx.strokeText(texto, x, y);
+          // Relleno del texto
+          ctx.fillText(texto, x, y);
+        }
+        // Pasa a la fila siguiente
+        fila++;
+      }
+      // Restaura el estado del contexto
+      ctx.restore();
+      // Devuelve el lienzo listo
+      return lienzo;
     }
 
     // Al tocar el botón de foto, abre el selector (cámara o galería)
@@ -1820,9 +2035,32 @@
 
     // Si la pestaña se oculta (cambio de app, multitarea) con una foto a la vista, se quema al instante
     document.addEventListener('visibilitychange', function () {
+      // Al ocultarse, también desenfoca (para la miniatura de la multitarea)
+      if (document.hidden) desenfocar();
       // Solo cuando se oculta y hay una foto visible
       if (document.hidden && mensaje && mensaje.fotoVisible) destruirMensaje(true);
     });
+
+    // ===================== DESENFOQUE AL PERDER EL FOCO =====================
+
+    // Desenfoca los mensajes (la ventana dejó de estar al frente)
+    function desenfocar() {
+      // Agrega la clase que aplica el desenfoque por CSS
+      document.body.classList.add('desenfocado');
+    }
+
+    // Vuelve a enfocar los mensajes
+    function enfocar() {
+      // Quita la clase de desenfoque
+      document.body.classList.remove('desenfocado');
+    }
+
+    // La ventana pierde el foco: herramienta de recortes (Win+Shift+S), otra app, notificación, etc.
+    window.addEventListener('blur', desenfocar);
+    // La ventana vuelve a tener el foco
+    window.addEventListener('focus', enfocar);
+    // Respaldo: si el usuario toca la página, es que la está usando (algunos móviles no avisan "focus")
+    document.addEventListener('pointerdown', enfocar, true);
 
     // ===================== LIMPIEZA AL CERRAR =====================
 
