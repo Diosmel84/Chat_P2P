@@ -537,8 +537,8 @@
 
     /* ===================== AUDIO ===================== */
 
-    /* Botón de micrófono (mantener apretado para grabar) */
-    .btn-micro {
+    /* Botón de micrófono (mantener apretado para grabar) y botón de foto */
+    .btn-micro, .btn-foto {
       /* Ancho fijo */
       width: 40px;
       /* Alto fijo */
@@ -575,8 +575,8 @@
       transform: scale(1.25);
     }
 
-    /* Botón de micrófono deshabilitado */
-    .btn-micro:disabled {
+    /* Botones de micrófono y foto deshabilitados */
+    .btn-micro:disabled, .btn-foto:disabled {
       /* Más transparente */
       opacity: 0.5;
       /* Cursor de prohibido */
@@ -593,8 +593,8 @@
       bottom: 12px;
       /* Desde el borde izquierdo */
       left: 0;
-      /* Deja libres los dos botones de la derecha (40 + 40 + separaciones) */
-      right: 96px;
+      /* Deja libres los tres botones de la derecha (3 × 40 + separaciones) */
+      right: 144px;
       /* Fondo igual al input */
       background: var(--panel);
       /* Borde rojo para indicar grabación */
@@ -679,7 +679,7 @@
       animation: aparecer 0.2s ease-out;
     }
 
-    /* Botón "Escuchar" dentro de la burbuja de audio */
+    /* Botón "Escuchar" (audio) y "Ver foto" dentro de la burbuja */
     .btn-escuchar {
       /* Fondo oscuro semitransparente */
       background: rgba(0, 0, 0, 0.25);
@@ -711,6 +711,26 @@
       opacity: 0.7;
       /* Separación con el botón */
       margin-top: 6px;
+    }
+
+    /* Foto efímera dentro de la burbuja */
+    .foto-efimera {
+      /* Ocupa su propia línea */
+      display: block;
+      /* No más ancha que la burbuja */
+      max-width: 100%;
+      /* No más alta que el 60% de la pantalla */
+      max-height: 60dvh;
+      /* Esquinas redondeadas */
+      border-radius: 14px;
+      /* No se puede seleccionar */
+      user-select: none;
+      /* No se puede arrastrar (Safari/Chrome) */
+      -webkit-user-drag: none;
+      /* Sin menú "Guardar imagen" al mantener apretado en iOS */
+      -webkit-touch-callout: none;
+      /* No recibe toques: no hay menú contextual ni arrastre sobre la imagen */
+      pointer-events: none;
     }
 
     /* Parpadeo del punto rojo de grabación */
@@ -780,6 +800,13 @@
       </div>
       <!-- Aviso breve (permiso denegado, audio muy corto, etc.) -->
       <div id="aviso" class="aviso oculto" role="status"></div>
+      <!-- Selector de archivo oculto: en el celular ofrece cámara o galería -->
+      <input id="selector-foto" type="file" accept="image/*" hidden>
+      <!-- Botón de foto: abre el selector -->
+      <button id="btn-foto" class="btn-foto" type="button" disabled aria-label="Enviar una foto que se ve una sola vez">
+        <!-- Ícono SVG de cámara -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      </button>
       <!-- Botón de micrófono: mantener apretado para grabar, soltar para enviar -->
       <button id="btn-micro" class="btn-micro" type="button" disabled aria-label="Mantené apretado para grabar un audio">
         <!-- Ícono SVG de micrófono -->
@@ -816,6 +843,18 @@
     const DURACION_MIN_AUDIO = 0.6;
     // Píxeles que hay que deslizar el dedo hacia la izquierda para cancelar
     const DESLIZAR_PARA_CANCELAR = 80;
+    // Lado más largo (en píxeles) al que se achica una foto antes de enviarla
+    const LADO_MAX_FOTO = 1280;
+    // Calidad JPEG de la foto enviada (0 a 1)
+    const CALIDAD_FOTO = 0.8;
+    // Tamaño máximo aceptado para una foto ya comprimida (3 MB)
+    const BYTES_MAX_FOTO = 3 * 1024 * 1024;
+    // Tamaño máximo del archivo original que se intenta procesar (30 MB)
+    const BYTES_MAX_ORIGINAL = 30 * 1024 * 1024;
+    // Si nadie abre la foto en este tiempo (segundos), se quema igual
+    const ESPERA_MAX_FOTO = 60;
+    // Formatos de imagen que se aceptan al recibir
+    const FORMATOS_FOTO = ['image/jpeg', 'image/png', 'image/webp'];
 
     // ===================== REFERENCIAS AL DOM =====================
 
@@ -847,6 +886,10 @@
     const elTiempoGrabacion = document.getElementById('tiempo-grabacion');
     // Aviso flotante
     const elAviso = document.getElementById('aviso');
+    // Botón de foto
+    const elBtnFoto = document.getElementById('btn-foto');
+    // Selector de archivo oculto
+    const elSelectorFoto = document.getElementById('selector-foto');
 
     // ===================== ESTADO EN MEMORIA =====================
 
@@ -890,6 +933,8 @@
       elBtnEnviar.disabled = !habilitado;
       // Activa/desactiva el micrófono (solo si el navegador puede grabar)
       elBtnMicro.disabled = !habilitado || !puedeGrabar;
+      // Activa/desactiva el botón de foto
+      elBtnFoto.disabled = !habilitado;
       // Si se habilitó, pone el foco en el input para escribir directo
       if (habilitado) elEntrada.focus();
     }
@@ -1182,6 +1227,8 @@
         if (datos === SENAL_ADIOS) { conexion.close(); return; }
         // Si es un objeto de tipo audio, lo valida y lo muestra
         if (datos && typeof datos === 'object' && datos.tipo === 'audio') { recibirAudio(datos); return; }
+        // Si es un objeto de tipo foto, la valida y la muestra
+        if (datos && typeof datos === 'object' && datos.tipo === 'foto') { recibirFoto(datos); return; }
         // Acepta solo texto (ignora cualquier otro tipo de dato)
         if (typeof datos !== 'string') return;
         // Quita espacios y recorta al largo máximo
@@ -1534,6 +1581,248 @@
 
     // Si el navegador no puede grabar, el botón lo explica al tocarlo
     if (!puedeGrabar) elBtnMicro.title = 'Tu navegador no permite grabar audio';
+
+    // ===================== FOTOS "VER UNA VEZ" =====================
+
+    // Carga un archivo de imagen en un elemento <img> (devuelve una promesa)
+    function cargarImagen(archivo) {
+      // Promesa que se resuelve cuando la imagen termina de cargar
+      return new Promise(function (resolver, rechazar) {
+        // URL temporal del archivo elegido
+        const url = URL.createObjectURL(archivo);
+        // Elemento imagen (no se agrega a la página)
+        const img = new Image();
+        // Si carga bien…
+        img.onload = function () {
+          // …libera la URL temporal y devuelve la imagen
+          URL.revokeObjectURL(url);
+          // Devuelve la imagen cargada
+          resolver(img);
+        };
+        // Si no se puede leer (formato no soportado, archivo roto)…
+        img.onerror = function () {
+          // …libera la URL temporal y avisa del error
+          URL.revokeObjectURL(url);
+          // Rechaza la promesa
+          rechazar(new Error('imagen ilegible'));
+        };
+        // Empieza a cargar
+        img.src = url;
+      });
+    }
+
+    // Achica y recomprime la foto a JPEG (esto también borra los metadatos: GPS, modelo, fecha)
+    async function comprimirFoto(archivo) {
+      // Carga la imagen (los navegadores actuales ya la giran según la orientación EXIF)
+      const img = await cargarImagen(archivo);
+      // Factor de escala para que el lado más largo no pase de LADO_MAX_FOTO
+      const escala = Math.min(1, LADO_MAX_FOTO / Math.max(img.naturalWidth, img.naturalHeight));
+      // Ancho final en píxeles
+      const ancho = Math.max(1, Math.round(img.naturalWidth * escala));
+      // Alto final en píxeles
+      const alto = Math.max(1, Math.round(img.naturalHeight * escala));
+      // Lienzo donde se dibuja la versión achicada
+      const lienzo = document.createElement('canvas');
+      // Le da el ancho final
+      lienzo.width = ancho;
+      // Le da el alto final
+      lienzo.height = alto;
+      // Contexto 2D para dibujar
+      const ctx = lienzo.getContext('2d');
+      // Fondo blanco (si la imagen era PNG transparente, en JPEG quedaría negro)
+      ctx.fillStyle = '#ffffff';
+      // Pinta el fondo
+      ctx.fillRect(0, 0, ancho, alto);
+      // Dibuja la imagen achicada
+      ctx.drawImage(img, 0, 0, ancho, alto);
+      // Convierte el lienzo a un archivo JPEG en memoria
+      const blob = await new Promise(function (resolver) { lienzo.toBlob(resolver, 'image/jpeg', CALIDAD_FOTO); });
+      // Libera la memoria del lienzo
+      lienzo.width = lienzo.height = 0;
+      // Si no se pudo convertir, error
+      if (!blob) throw new Error('no se pudo comprimir');
+      // Devuelve el JPEG
+      return blob;
+    }
+
+    // Procesa y envía la foto elegida
+    async function enviarFoto(archivo) {
+      // Si no hay conexión, no hace nada
+      if (!conexion || !conexion.open) return;
+      // Si no es una imagen, avisa
+      if (!archivo.type.startsWith('image/')) { avisar('Eso no es una imagen'); return; }
+      // Si el original es gigante, avisa
+      if (archivo.size > BYTES_MAX_ORIGINAL) { avisar('La imagen es demasiado grande'); return; }
+      // Avisa que está trabajando
+      avisar('Enviando foto…');
+      // La compresión puede fallar
+      let blob;
+      // Intenta comprimir
+      try {
+        // Achica y recomprime
+        blob = await comprimirFoto(archivo);
+      } catch (err) {
+        // Por ejemplo, fotos HEIC en navegadores que no las entienden
+        avisar('No se pudo leer esa imagen');
+        // Termina
+        return;
+      }
+      // Si aun comprimida pesa demasiado, avisa
+      if (blob.size > BYTES_MAX_FOTO) { avisar('La imagen es demasiado pesada'); return; }
+      // Convierte a bytes para el DataChannel
+      const bytes = await blob.arrayBuffer();
+      // Verifica de nuevo la conexión (pudo cortarse mientras se comprimía)
+      if (!conexion || !conexion.open) return;
+      // Envía un objeto con tipo, formato y los bytes
+      conexion.send({ tipo: 'foto', formato: 'image/jpeg', datos: bytes });
+      // Oculta el aviso "Enviando foto…"
+      elAviso.classList.add('oculto');
+      // Muestra la confirmación en nuestra pantalla
+      mostrarFoto(null, 'yo');
+    }
+
+    // Valida una foto que llegó del otro usuario y la muestra
+    function recibirFoto(datos) {
+      // Los bytes pueden llegar como ArrayBuffer o como vista (Uint8Array)
+      const bytes = datos.datos;
+      // Si no son bytes, se ignora
+      if (!(bytes instanceof ArrayBuffer) && !ArrayBuffer.isView(bytes)) return;
+      // Si pesan demasiado, se ignora
+      if (bytes.byteLength > BYTES_MAX_FOTO) return;
+      // Solo formatos de imagen conocidos (nunca SVG ni otros)
+      if (!FORMATOS_FOTO.includes(datos.formato)) return;
+      // Arma la imagen en memoria
+      const blob = new Blob([bytes], { type: datos.formato });
+      // La muestra como "del otro"
+      mostrarFoto(blob, 'otro');
+    }
+
+    // Muestra una foto efímera. Si es mía, solo la confirmación; si es del otro, el botón "Ver foto"
+    function mostrarFoto(blob, deQuien) {
+      // Crea la burbuja (y quema la anterior si existía)
+      const burbuja = prepararBurbuja(deQuien);
+
+      // Foto propia: solo se confirma y se quema
+      if (deQuien === 'yo') {
+        // Texto de confirmación
+        burbuja.textContent = '📷 Foto enviada';
+        // Arranca el 5-4-3-2-1
+        iniciarCuentaRegresiva();
+        // No hay nada más que hacer
+        return;
+      }
+
+      // Referencia a este mensaje para saber si sigue siendo el vivo más tarde
+      const propio = mensaje;
+      // URL temporal en memoria para la foto recibida
+      let url = URL.createObjectURL(blob);
+      // Elemento imagen (se crea recién al tocar "Ver foto")
+      let img = null;
+
+      // Botón para ver la foto (mismo estilo que "Escuchar")
+      const boton = document.createElement('button');
+      // Le asigna su clase
+      boton.className = 'btn-escuchar';
+      // Tipo botón (no envía el formulario)
+      boton.type = 'button';
+      // Texto del botón
+      boton.textContent = '👁 Ver foto';
+      // Lo agrega a la burbuja
+      burbuja.appendChild(boton);
+
+      // Nota aclaratoria
+      const nota = document.createElement('span');
+      // Le asigna su clase
+      nota.className = 'nota-audio';
+      // Texto de la nota
+      nota.textContent = 'Se ve una sola vez · ' + SEGUNDOS_DE_VIDA + ' s';
+      // La agrega a la burbuja
+      burbuja.appendChild(nota);
+
+      // Evita el menú contextual (guardar imagen) sobre toda la burbuja
+      burbuja.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+      // Al destruir el mensaje: libera la memoria
+      // (la imagen ya dibujada sigue visible durante la animación de quemado y se va con la burbuja)
+      propio.limpiar = function () {
+        // Libera la URL temporal (nadie más puede volver a abrir la foto)
+        if (url) URL.revokeObjectURL(url);
+        // Suelta las referencias
+        url = null;
+        // Suelta la imagen
+        img = null;
+      };
+
+      // Si nadie la abre en ESPERA_MAX_FOTO segundos, se quema igual
+      propio.espera = setTimeout(function () {
+        // Solo si sigue siendo el mensaje vivo
+        if (mensaje === propio) destruirMensaje(false);
+      }, ESPERA_MAX_FOTO * 1000);
+
+      // Al tocar "Ver foto"…
+      boton.addEventListener('click', function () {
+        // Se deshabilita: se ve una sola vez
+        boton.disabled = true;
+        // Cancela la espera de 60 segundos
+        clearTimeout(propio.espera);
+        // Crea la imagen
+        img = new Image();
+        // Le asigna su clase
+        img.className = 'foto-efimera';
+        // Texto alternativo
+        img.alt = 'Foto efímera';
+        // No se puede arrastrar
+        img.draggable = false;
+        // Cuando termina de cargar…
+        img.onload = function () {
+          // …si ya no es el mensaje vivo, no hace nada
+          if (mensaje !== propio || !img) return;
+          // Quita el botón
+          boton.remove();
+          // Quita la nota
+          nota.remove();
+          // Muestra la foto en la burbuja
+          burbuja.appendChild(img);
+          // Marca que hay una foto visible (para ocultarla si se cambia de app)
+          propio.fotoVisible = true;
+          // Arranca el 5-4-3-2-1
+          iniciarCuentaRegresiva();
+        };
+        // Si no se puede mostrar…
+        img.onerror = function () {
+          // …si ya no es el mensaje vivo, no hace nada
+          if (mensaje !== propio) return;
+          // Avisa en el botón
+          boton.textContent = '⚠️ No se pudo mostrar la foto';
+          // Y la quema
+          iniciarCuentaRegresiva();
+        };
+        // Empieza a cargar la foto desde la memoria
+        img.src = url;
+      });
+    }
+
+    // Al tocar el botón de foto, abre el selector (cámara o galería)
+    elBtnFoto.addEventListener('click', function () {
+      // Solo si hay conexión
+      if (conexion && conexion.open) elSelectorFoto.click();
+    });
+
+    // Cuando se elige una foto…
+    elSelectorFoto.addEventListener('change', function () {
+      // Toma el primer archivo elegido
+      const archivo = elSelectorFoto.files && elSelectorFoto.files[0];
+      // Limpia el selector (así se puede elegir la misma foto otra vez y no queda guardada)
+      elSelectorFoto.value = '';
+      // Si eligió algo, lo envía
+      if (archivo) enviarFoto(archivo);
+    });
+
+    // Si la pestaña se oculta (cambio de app, multitarea) con una foto a la vista, se quema al instante
+    document.addEventListener('visibilitychange', function () {
+      // Solo cuando se oculta y hay una foto visible
+      if (document.hidden && mensaje && mensaje.fotoVisible) destruirMensaje(true);
+    });
 
     // ===================== LIMPIEZA AL CERRAR =====================
 

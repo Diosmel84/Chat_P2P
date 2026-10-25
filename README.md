@@ -1,6 +1,6 @@
 # 🔥 Chat Efímero P2P
 
-Un chat entre dos personas que **se conecta directo de navegador a navegador** (P2P) y donde **cada mensaje se autodestruye a los 5 segundos**. Además de texto, permite mandar **audios que se escuchan una sola vez**. Todo está en un solo archivo, `index.html`: no usa backend, ni npm, ni pasos de build.
+Un chat entre dos personas que **se conecta directo de navegador a navegador** (P2P) y donde **cada mensaje se autodestruye a los 5 segundos**. Además de texto, permite mandar **audios que se escuchan una sola vez** y **fotos que se ven una sola vez**. Todo está en un solo archivo, `index.html`: no usa backend, ni npm, ni pasos de build.
 
 🌐 **Publicado en:** <https://diosmel84.github.io/Chat_P2P/>
 
@@ -14,10 +14,11 @@ Un chat entre dos personas que **se conecta directo de navegador a navegador** (
 4. [Estructura del archivo](#estructura-del-archivo)
 5. [Ciclo de vida de un mensaje](#ciclo-de-vida-de-un-mensaje)
 6. [Audios efímeros](#audios-efímeros)
-7. [Privacidad y seguridad](#privacidad-y-seguridad)
-8. [Publicarlo en internet](#publicarlo-en-internet)
-9. [Limitaciones conocidas](#limitaciones-conocidas)
-10. [Personalización rápida](#personalización-rápida)
+7. [Fotos "ver una vez"](#fotos-ver-una-vez)
+8. [Privacidad y seguridad](#privacidad-y-seguridad)
+9. [Publicarlo en internet](#publicarlo-en-internet)
+10. [Limitaciones conocidas](#limitaciones-conocidas)
+11. [Personalización rápida](#personalización-rápida)
 
 ---
 
@@ -36,6 +37,7 @@ Un chat entre dos personas que **se conecta directo de navegador a navegador** (
 | Cerrar pestaña = destruir todo | `pagehide`/`beforeunload` cierran la conexión y destruyen el Peer. No usa `localStorage` |
 | Diseño | Modo oscuro, mobile first, centrado, burbujas estilo iMessage, animación de quemado |
 | Audios efímeros | Mantener apretado 🎤 para grabar (máx. 30 s). Se escuchan **una sola vez** y después se queman |
+| Fotos "ver una vez" | Botón 📷 (cámara o galería). Se ven **una sola vez**, durante 5 s, y después se queman |
 
 ---
 
@@ -51,6 +53,7 @@ Un chat entre dos personas que **se conecta directo de navegador a navegador** (
    > 🟢 Conectado - mensajes se autodestruyen en 5s
 5. Escriben. Cada mensaje cuenta 5 → 1, se prende fuego y desaparece.
    - Para mandar un **audio**: mantené apretado el botón 🎤, hablá y soltá. Para cancelar, deslizá el dedo hacia la izquierda.
+   - Para mandar una **foto**: tocá 📷 y elegí sacar una foto o una de la galería.
 6. Cuando alguien cierra la pestaña, la conversación termina y no queda nada.
 
 ### Probarlo en tu propia compu
@@ -104,7 +107,8 @@ El `index.html` tiene tres partes, y está comentado **línea por línea en espa
 | `#panel-link` | "Tu link para chatear:", la URL y el botón copiar |
 | `#escenario` | Zona donde vive **el único mensaje** visible |
 | `#vacio` | Texto de ayuda cuando no hay mensaje |
-| `#formulario` | Input + botón 🎤 + botón enviar (deshabilitados hasta conectar) |
+| `#formulario` | Input + botón 📷 + botón 🎤 + botón enviar (deshabilitados hasta conectar) |
+| `#btn-foto` / `#selector-foto` | Botón de cámara y el `<input type="file">` oculto que abre cámara o galería |
 | `#btn-micro` | Botón de micrófono: mantener apretado para grabar |
 | `#indicador-grabacion` | Píldora roja "● 0:05 ◀ deslizá para cancelar" que tapa el input mientras se graba |
 | `#aviso` | Cartelito breve (permiso denegado, audio cancelado, etc.) |
@@ -124,6 +128,11 @@ El `index.html` tiene tres partes, y está comentado **línea por línea en espa
 | `soltarGrabacion(cancelar)` | Detiene la grabación; con `true` la descarta |
 | `finalizarGrabacion(actual)` | Apaga el micrófono, valida duración y peso, y envía el audio |
 | `recibirAudio(datos)` | Valida el audio recibido (tipo, formato, peso, duración) y lo muestra |
+| `cargarImagen(archivo)` | Carga un archivo en un `<img>` (promesa) |
+| `comprimirFoto(archivo)` | Achica a 1280 px, recomprime a JPEG 80 % y borra los metadatos |
+| `enviarFoto(archivo)` | Valida, comprime y envía la foto por el DataChannel |
+| `recibirFoto(datos)` | Valida la foto recibida (bytes, peso, formato permitido) y la muestra |
+| `mostrarFoto(blob, deQuien)` | Foto propia: "📷 Foto enviada". Foto ajena: botón "👁 Ver foto" de un solo uso |
 | `avisar(texto)` / `formatoTiempo(seg)` | Utilidades: cartel breve y formato `m:ss` |
 | `ponerEstado(texto, tipo)` | Cambia el texto y el color del estado |
 | `habilitarChat(bool)` | Activa o desactiva el input y el botón |
@@ -213,6 +222,39 @@ recibirAudio() valida ──► new Blob ──► URL.createObjectURL ──►
 
 ---
 
+## Fotos "ver una vez"
+
+### Cómo se usa
+1. Tocá **📷**. En el celular podés **sacar una foto** o **elegir una de la galería**.
+2. La foto se procesa y se envía sola. Mientras tanto aparece "Enviando foto…".
+3. **Quien la manda** ve "📷 Foto enviada", con la cuenta regresiva de 5 s.
+4. **Quien la recibe** ve un botón **"👁 Ver foto"** y la nota *"Se ve una sola vez · 5 s"*. No hay vista previa.
+   - Al tocarlo se muestra la foto durante **5 segundos** (5-4-3-2-1) y se quema 🔥.
+   - Si no la abre en **60 segundos**, se quema igual.
+   - Si **cambia de app o de pestaña** mientras la ve, se quema al instante. Así no queda en la vista de multitarea.
+
+### Qué se hace con la foto antes de enviarla
+```
+archivo elegido ──► <img> ──► <canvas> 1280 px máx. ──► JPEG 80 % ──► ArrayBuffer
+                                                              │
+                  conexion.send({ tipo:'foto', formato:'image/jpeg', datos })   ← DataChannel P2P
+```
+- **Se achica** para que el lado más largo mida como máximo 1280 px. Una foto de celular de 4 a 10 MB queda en unos 100 a 300 KB, y viaja rápido.
+- **Se recomprime a JPEG**, y eso **borra todos los metadatos EXIF**: ubicación GPS, modelo del celular, fecha y hora.
+- Se pinta un **fondo blanco** antes de dibujarla, para que los PNG transparentes no queden negros.
+- El `<input type="file">` se limpia después de cada uso, así la foto no queda referenciada.
+
+### Protecciones al mostrarla
+- El `<img>` tiene `pointer-events: none`, `draggable = false` y `-webkit-touch-callout: none`. Además se bloquea el menú contextual. Así no aparece "Guardar imagen" ni se puede arrastrar.
+- La imagen vive en una URL temporal (`blob:`) que se **revoca** al quemarse.
+
+### Validaciones al recibir
+- Los `datos` tienen que ser bytes de **3 MB como máximo**.
+- El `formato` tiene que ser `image/jpeg`, `image/png` o `image/webp`. **Nunca SVG**, que puede contener código.
+- Si algo no cumple, el mensaje se ignora en silencio.
+
+---
+
 ## Privacidad y seguridad
 
 - ✅ **Sin backend propio y sin base de datos.** No hay ningún lugar donde se guarden los mensajes.
@@ -222,6 +264,7 @@ recibirAudio() valida ──► new Blob ──► URL.createObjectURL ──►
 - ✅ **Anti-XSS:** el texto recibido se inserta con `textContent`, nunca con `innerHTML`.
 - ✅ **Validación:** solo se aceptan strings, recortados a 500 caracteres.
 - ✅ **Solo 2 personas:** si un tercero usa el link mientras hay una charla activa, se le cierra la conexión.
+- ✅ **Fotos sin metadatos:** se recomprimen antes de enviarse, así no viaja la ubicación GPS ni los datos del celular.
 - ✅ **Audios sin rastro:** el reproductor no se agrega a la página (no hay controles ni botón de descarga), y al quemarse se libera la memoria con `URL.revokeObjectURL`. Se escuchan una sola vez.
 
 ⚠️ **Lo que NO puede evitar:**
@@ -253,6 +296,8 @@ Como es un único archivo estático, también se puede subir a cualquier hosting
 - **Si alguien recarga la página**, cambia su ID y se corta la conversación (es a propósito: es efímero).
 - Si la pestaña queda en **segundo plano**, el navegador puede retrasar los temporizadores; igual el respaldo con `setTimeout` asegura que el mensaje se borre.
 - **Audios:** necesitan un navegador con `MediaRecorder` (Chrome, Firefox, Edge, y Safari desde iOS 14.3). En navegadores viejos el botón 🎤 queda deshabilitado. Si un navegador muy viejo recibe un formato que no entiende, muestra "⚠️ Tu navegador no puede reproducir este audio" y lo quema.
+- **Fotos HEIC:** el iPhone las convierte a JPEG al elegirlas desde Safari o Chrome. Si algún navegador no puede leer una foto, aparece "No se pudo leer esa imagen".
+- **Fotos:** nadie puede impedir una **captura de pantalla** mientras se ve la foto. Ningún navegador web lo permite.
 - **Audios:** si se niega el permiso del micrófono, hay que habilitarlo desde la configuración del sitio en el navegador (🔒 en la barra de direcciones).
 
 ---
@@ -270,7 +315,11 @@ Como es un único archivo estático, también se puede subir a cualquier hosting
 | Tiempo para escuchar antes de que se queme | `const ESPERA_MAX_AUDIO = 60;` |
 | Peso máximo de audio | `const BYTES_MAX_AUDIO = 2 * 1024 * 1024;` |
 | Distancia para cancelar deslizando | `const DESLIZAR_PARA_CANCELAR = 80;` |
+| Tamaño máximo de las fotos enviadas | `const LADO_MAX_FOTO = 1280;` |
+| Calidad JPEG de las fotos | `const CALIDAD_FOTO = 0.8;` |
+| Peso máximo de foto aceptada | `const BYTES_MAX_FOTO = 3 * 1024 * 1024;` |
+| Tiempo para abrir la foto antes de que se queme | `const ESPERA_MAX_FOTO = 60;` |
 
 ---
 
-**Tecnologías:** HTML5 · CSS3 · JavaScript vanilla · WebRTC · MediaRecorder API · [PeerJS 1.5.2](https://peerjs.com/)
+**Tecnologías:** HTML5 · CSS3 · JavaScript vanilla · WebRTC · MediaRecorder API · Canvas API · [PeerJS 1.5.2](https://peerjs.com/)
